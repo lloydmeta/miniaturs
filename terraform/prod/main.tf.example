@@ -1,0 +1,40 @@
+// Rename this to `main.tf` and modify as needed
+
+terraform {
+  // Required: these should stay as-is
+  required_version = ">= 1.0.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.0"
+    }
+  }
+
+  // Optional, but recommended S3 as TF backend
+  backend "s3" {
+    bucket         = "lloydmeta-terraform-state-miniaturs"
+    region         = "ap-northeast-1"
+    key            = "terraform.tfstate"
+    encrypt        = true
+    profile        = "AWS_profile_for_authc"
+    dynamodb_table = "terraform_state_lock-miniaturs"
+  }
+}
+
+provider "aws" {
+  region  = "ap-northeast-1"
+  profile = "AWS_profile_for_authc"
+}
+
+provider "aws" {
+  region  = "us-east-1"
+  alias   = "virginia"
+  profile = "AWS_profile_for_authc"
+}
+
+provider "cloudflare" {}
+

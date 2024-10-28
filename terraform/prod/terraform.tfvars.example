@@ -1,0 +1,5 @@
+name                                = "miniaturs"
+image_cache_unprocessed_bucket_name = "miniaturs-unprocessed-images"
+image_cache_processed_bucket_name   = "miniaturs-processed-images"
+subdomain                           = "miniaturs"
+domain                              = "example.com"

@@ -1,0 +1,40 @@
+[package]
+name = "miniaturs_server"
+version = "0.1.0"
+edition = "2021"
+
+# Starting in Rust 1.62 you can use `cargo add` to add dependencies 
+# to your project.
+#
+# If you're using an older Rust version,
+# download cargo-edit(https://github.com/killercup/cargo-edit#installation) 
+# to install the `add` subcommand.
+#
+# Running `cargo add DEPENDENCY_NAME` will
+# add the latest version of a dependency to the list,
+# and it will keep the alphabetic ordering for you.
+
+[dependencies]
+anyhow = "1.0"
+lambda_http = "0.13.0"
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
+axum = "0.7"
+serde = "1.0"
+serde_json = "1.0"
+tokio = { version = "1", features = ["macros"] }
+image = { version = "0.25", features = ["rayon"] }
+
+miniaturs_shared = { path = "../shared" }
+aws-sdk-s3 = "1.57"
+aws-config = "1.5"
+sha256 = "1.5"
+http-body-util = "0.1"
+bytes = "1.7"
+tower-http = { version = "0.6.1", features = ["catch-panic"] }
+
+[dev-dependencies]
+testcontainers = { version = "0.23" }
+testcontainers-modules = { version = "0.11", features = ["localstack"] }

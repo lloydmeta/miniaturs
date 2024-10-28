@@ -1,0 +1,24 @@
+[package]
+name = "miniaturs"
+version = "0.1.0"
+edition = "2021"
+description = "Client for miniaturs server"
+license = "MIT"
+documentation = "https://docs.rs/miniaturs"
+keywords = ["image", "manipulation", "client"]
+
+# Starting in Rust 1.62 you can use `cargo add` to add dependencies 
+# to your project.
+#
+# If you're using an older Rust version,
+# download cargo-edit(https://github.com/killercup/cargo-edit#installation) 
+# to install the `add` subcommand.
+#
+# Running `cargo add DEPENDENCY_NAME` will
+# add the latest version of a dependency to the list,
+# and it will keep the alphabetic ordering for you.
+
+[dependencies]
+
+anyhow = "1.0"
+miniaturs_shared = { path = "../shared", version = "0.1.0" }

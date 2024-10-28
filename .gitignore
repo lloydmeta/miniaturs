@@ -1,0 +1,13 @@
+/target
+
+# TF related
+terraform.tfstate
+errored.tfstate
+terraform.tfstate.backup
+.terraform
+.terraform.lock.hcl
+terraform/prod/main.tf
+terraform/prod/terraform.tfvars
+
+# Localstack
+terraform/localdev/volume
