@@ -1,4 +1,4 @@
-# Miniaturs 
+# Miniaturs
 [![Continuous integration](https://github.com/lloydmeta/miniaturs/actions/workflows/ci.yaml/badge.svg)](https://github.com/lloydmeta/miniaturs/actions/workflows/ci.yaml)
 
 HTTP image resizer
@@ -7,52 +7,51 @@ HTTP image resizer
 
 * Secure 
 * Fast: 
-  * Startup should be low 2 digit ms (e.g. avoid "oh, it's a lambda")
+  * Startup should be in the low 2-digit ms range (e.g., avoid "oh, it's a lambda")
   * Processing should be quick
 * Cheap: 
-  * Pay as little as possible, and do as little as possible
-  * Being fast can help avoid paying
+  * Pay as little as possible and avoid unnecessary work
+  * Being fast can help minimise costs
 * Scalable: can handle lots of requests
-* Thumbor-ish 
-* A good net-citizen (don't make requests to 3rd parties if we have it in cache)
+* Thumbor-ish
+* A good net citizen (don’t make requests to third parties if we have it in cache)
 * Debuggable
 
 To fulfil the above:
 
-* Runs in a lambda
+* Runs in a Lambda
 * Rust ⚡️
 * Caching in layers: CDN with S3 for images
-* Serverless, but built on HTTP-framework 
+* Serverless, but built on HTTP framework ([cargo-lambda](https://www.cargo-lambda.info) on top of [axum](https://github.com/tokio-rs/axum))
 
-A example TF in `terraform/prod` is provided to show how to deploy something that sits
-at a subdomain, using Cloudflare as our (free!) CDN + WAF.
+An example Terraform config in `terraform/prod` is provided to show how to deploy at a subdomain using Cloudflare as our (free!) CDN + WAF.
 
 ## Flow
 
-1. Layer 1 validations (is the request well formed)
-2. Ensure trusted request (e.g. check hash)
-3. Layer 2 validations (no I/O)
-  1. Are the image processing options supported?
-    1. Resize-to target size check (e.g. is it too big?) PENDING
-  2. Is the remote image path pointing to a supported source? PENDING
-  3. Is the remote image extension supported?
-4. Determine if we can return a cached result
-  1. Is there a cached result in the storage bucket?
-    1. If yes, return it as the result
-    2. Else continue
+1. Layer 1 validations (is the request well-formed?)
+2. Ensure trusted request (e.g., check hash)
+3. Layer 2 validations (no I/O):
+    1. Are the image processing options supported?
+       1. Resize-to target size check (e.g., is it too big?) PENDING
+    2. Is the remote image path pointing to a supported source? PENDING
+    3. Is the remote image extension supported?
+4. Determine if we can return a cached result:
+    1. Is there a cached result in the storage bucket?
+        1. If yes, return it as the result
+        2. Else continue
 5. Image retrieval:
-  1. Is the remote image already cached in our source bucket?
-    1. If yes, retrieve it
-    2. If not, issue a HEAD request to get image size PENDING
-      1. If the image size does not exceed configured max, retrieve it 
-      2. Else return an error
-    3. Is the actual downloadeded image too big? PENDING
-      1. If yes, return an error
+    1. Is the remote image already cached in our source bucket?
+        1. If yes, retrieve it
+        2. If not, issue a HEAD request to get image size PENDING
+        3. If the image size does not exceed the configured max, retrieve it
+            1. Else return an error  PENDING
+    2. Is the actual downloaded image too big? PENDING
+        1. If yes, return an error
 6. Image processing:
-  1. Is the image in a supported format for our processor?
-    1. If yes, process
-    2. Else return an error
-7. Cache resulting image in our bucket
+    1. Is the image in a supported format for our processor?
+        1. If yes, process it
+        2. Else return an error
+7. Cache the resulting image in our bucket
 8. Return the resulting image
 
 ## Development
@@ -70,11 +69,10 @@ Assuming we have the [Rust toolbelt installed](https://doc.rust-lang.org/cargo/g
 * `brew install awscli` to install the CLI
 * Log into your app
 
-Ensure 
+Ensure:
 
 * `aws configure sso` is done
-* `.aws/config` has the right profile config, with a `[profile ${PROFILE_NAME}]` line, where `PROFILE_NAME` matches what is in `main.tf`
-
+* `.aws/config` has the correct profile configuration, with a `[profile ${PROFILE_NAME}]` line where `PROFILE_NAME` matches what is in `main.tf`
 
 #### Login for Terraform
 
@@ -82,43 +80,43 @@ Ensure
 
 ### Cloudflare
 
-* Ensure `CLOUDFLARE_API_TOKEN` is defined in the env (needed for Cloudflare provider and cache busting). It'll need the privileges for updating DNS and cache settings
+Ensure `CLOUDFLARE_API_TOKEN` is defined in the environment (needed for Cloudflare provider and cache busting). It’ll need privileges for updating DNS and cache settings.
 
 ## Deploying
 
 ### Terraform
 
 * Use tfenv: https://formulae.brew.sh/formula/tfenv
-* Check what version is needed an install using ^
+* Check what version is needed and install using ^
 
 * For local dev, `localstack` is used (see terraform/localdev/docker-compose.yaml), and `tflocal` is used (https://formulae.brew.sh/formula/terraform-local)
-  * `docker-compose` through official docker _or_ Rancher is supported, but [enabling admin access](https://github.com/rancher-sandbox/rancher-desktop/issues/2534#issuecomment-1909912585) is needed for running tests with Rancher
+  * `docker-compose` through official Docker _or_ Rancher is supported, but [enabling admin access](https://github.com/rancher-sandbox/rancher-desktop/issues/2534#issuecomment-1909912585) is needed for running tests with Rancher
 
-### Per env
+### Per Environment
 
-Use `Makefile`  targets
+Use `Makefile` targets.
 
-* For local def:
+* For local dev:
     * `make start_dev_env provision_dev_env`
     * `make begin_dev`
-    * `TO_SIGN="200x-100/https://beachape.com/images/octopress_with_container.png" make signature_for_localstack` to get a signed path for devenv
+    * `TO_SIGN="200x-100/https://beachape.com/images/octopress_with_container.png" make signature_for_localstack` to get a signed path for dev env
     * `TO_SIGN="200x-100/https://beachape.com/images/octopress_with_container.png" make signature_for_dev` to get a signed path for dev
 * For prod:
-    * Copy + customise:
-      * `main.tf.example` to `main.tf` 
+    * Copy and customise:
+      * `main.tf.example` to `main.tf`
       * `terraform.tfvars.example` to `terraform.tfvars`
     * `make plan_prod` to see changes
     * `make provision_prod` to apply changes
     * `TO_SIGN="200x-100/https://beachape.com/images/octopress_with_container.png" make signature_for_prod` to get a signed path
 
-## To explore
+## To Explore
 
-* img resizing 
+* Image resizing 
   * https://imgproxy.net/blog/almost-free-image-processing-with-imgproxy-and-aws-lambda/
   * https://zenn.dev/devneko/articles/0a6fb5c9ea5689
   * https://crates.io/crates/image
-* a [metadata endpoint](https://thumbor.readthedocs.io/en/stable/usage.html#metadata-endpoint)
-* [logs, tracing](https://github.com/tokio-rs/tracing?tab=readme-ov-file#in-applications)
-* improve image resizing
-  * Encapsulate + test
+* A [metadata endpoint](https://thumbor.readthedocs.io/en/stable/usage.html#metadata-endpoint)
+* [Logs, tracing](https://github.com/tokio-rs/tracing?tab=readme-ov-file#in-applications)
+* Improve image resizing:
+  * Encapsulate and test
   * Do in another thread?
