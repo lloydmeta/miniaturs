@@ -9,12 +9,32 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json;
 use sha256;
 
-use crate::api::requests::ImageResize;
+use crate::api::requests::ImageResizePathParam;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct ImageResizeRequest {
     pub requested_image_url: String,
     pub resize_target: ImageResize,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
+pub struct ImageResize {
+    pub target_width: i32,
+    pub target_height: i32,
+}
+
+impl From<ImageResizePathParam> for ImageResize {
+    fn from(
+        ImageResizePathParam {
+            target_width,
+            target_height,
+        }: ImageResizePathParam,
+    ) -> Self {
+        Self {
+            target_width,
+            target_height,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]

@@ -47,7 +47,6 @@ mod tests {
     use http_body_util::BodyExt;
     use image::{ImageFormat, ImageReader};
     use lambda_http::tower::ServiceExt;
-    use miniaturs_server::api::requests::ImageResize;
     use miniaturs_server::infra::config::{
         AuthenticationSettings, AwsSettings, ImageCacheSettings,
     };

@@ -20,7 +20,7 @@ use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE};
 use responses::Standard;
 use tower_http::catch_panic::CatchPanicLayer;
 
-use crate::api::requests::{ImageResize, Signature};
+use crate::api::requests::{ImageResizePathParam, Signature};
 use crate::api::responses;
 use crate::infra::components::AppComponents;
 use crate::infra::config::AuthenticationSettings;
@@ -53,7 +53,7 @@ async fn root() -> Json<Standard> {
 async fn resize(
     State(app_components): State<AppComponents>,
     uri: Uri,
-    Path((signature, resized_image, image_url)): Path<(Signature, ImageResize, String)>,
+    Path((signature, resized_image, image_url)): Path<(Signature, ImageResizePathParam, String)>,
 ) -> Result<Response, AppError> {
     ensure_signature_is_valid(
         &app_components.config.authentication_settings,
@@ -63,7 +63,7 @@ async fn resize(
     let processed_image_request = {
         ImageResizeRequest {
             requested_image_url: image_url.clone(),
-            resize_target: resized_image,
+            resize_target: resized_image.into(),
         }
     };
     let maybe_cached_resized_image = app_components
