@@ -228,7 +228,12 @@ fn ensure_signature_is_valid(
             .map(|pq| {
                 // lambda axum seems to insert empty query params when handling reqs
                 // as a lambda
-                pq.as_str().strip_suffix("?").unwrap_or(pq.as_str())
+                let pq_as_str = pq.as_str();
+                if uri.query().filter(|q| !q.trim().is_empty()).is_some() {
+                    pq_as_str
+                } else {
+                    pq_as_str.strip_suffix("?").unwrap_or(pq_as_str)
+                }
             })
             .unwrap_or("")
     };
