@@ -6,17 +6,17 @@ use serde::{de, Deserialize, Deserializer};
 pub(crate) struct Signature(pub(crate) String);
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
-pub struct ImageResize {
+pub struct ImageResizePathParam {
     pub target_width: i32,
     pub target_height: i32,
 }
 
-impl<'de> serde::Deserialize<'de> for ImageResize {
+impl<'de> serde::Deserialize<'de> for ImageResizePathParam {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         d.deserialize_str(ImageResizeVisitor)
     }
 }
-impl serde::Serialize for ImageResize {
+impl serde::Serialize for ImageResizePathParam {
     fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -30,7 +30,7 @@ struct ImageResizeVisitor;
 const IMAGE_RESIZE_PARSE_ERROR: &str = "A string with two numbers and an x in between";
 
 impl<'de> de::Visitor<'de> for ImageResizeVisitor {
-    type Value = ImageResize;
+    type Value = ImageResizePathParam;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str(IMAGE_RESIZE_PARSE_ERROR)
@@ -44,7 +44,7 @@ impl<'de> de::Visitor<'de> for ImageResizeVisitor {
     }
 }
 
-impl FromStr for ImageResize {
+impl FromStr for ImageResizePathParam {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -55,7 +55,7 @@ impl FromStr for ImageResize {
             let width: i32 = width_str.parse()?;
             let height: i32 = height_str.parse()?;
 
-            Ok(ImageResize {
+            Ok(ImageResizePathParam {
                 target_width: width,
                 target_height: height,
             })

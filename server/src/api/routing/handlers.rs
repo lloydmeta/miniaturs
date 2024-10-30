@@ -20,8 +20,8 @@ use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE};
 use responses::Standard;
 use tower_http::catch_panic::CatchPanicLayer;
 
-use crate::api::requests::{ImageResize, Signature};
-use crate::api::responses;
+use crate::api::requests::{ImageResizePathParam, Signature};
+use crate::api::responses::{self, MetadataResponse};
 use crate::infra::components::AppComponents;
 use crate::infra::config::AuthenticationSettings;
 use crate::infra::errors::AppError;
@@ -29,6 +29,7 @@ use crate::infra::image_caching::{
     ImageCacher, ImageFetchRequest, ImageFetchedCacheRequest, ImageResizeRequest,
     ImageResizedCacheRequest,
 };
+use crate::infra::image_manipulation::{Operations, OperationsRunner, SingletonOperationsRunner};
 
 use miniaturs_shared::signature::{ensure_signature_is_valid_for_path_and_query, SignatureError};
 
@@ -39,6 +40,7 @@ pub fn create_router(app_components: AppComponents) -> Router {
         .route("/", get(root))
         .route("/health", get(health_check))
         .route("/:signature/:resized_image/*image_url", get(resize))
+        .route("/:signature/meta/:resized_image/*image_url", get(metadata))
         .fallback(handle_404)
         .layer(CatchPanicLayer::custom(handle_panic))
         .with_state(app_components)
@@ -53,17 +55,18 @@ async fn root() -> Json<Standard> {
 async fn resize(
     State(app_components): State<AppComponents>,
     uri: Uri,
-    Path((signature, resized_image, image_url)): Path<(Signature, ImageResize, String)>,
+    Path((signature, resized_image, image_url)): Path<(Signature, ImageResizePathParam, String)>,
 ) -> Result<Response, AppError> {
     ensure_signature_is_valid(
         &app_components.config.authentication_settings,
         &uri,
         signature,
     )?;
+    let operations = Operations::build(&Some(resized_image.into()));
     let processed_image_request = {
         ImageResizeRequest {
             requested_image_url: image_url.clone(),
-            resize_target: resized_image,
+            operations,
         }
     };
     let maybe_cached_resized_image = app_components
@@ -137,23 +140,16 @@ async fn resize(
         let format = reader_with_format
             .format()
             .ok_or(AppError::UnableToDetermineFormat)?;
-        let mut dynamic_image = reader_with_format.decode()?;
 
-        dynamic_image = dynamic_image.resize(
-            resized_image.target_width as u32,
-            resized_image.target_height as u32,
-            image::imageops::FilterType::Gaussian,
-        );
-
-        if resized_image.target_width < 0 {
-            dynamic_image = dynamic_image.fliph();
-        }
-        if resized_image.target_height < 0 {
-            dynamic_image = dynamic_image.flipv();
-        }
+        let image = SingletonOperationsRunner
+            .run(
+                reader_with_format.decode()?,
+                &processed_image_request.operations,
+            )
+            .await;
 
         let mut cursor = Cursor::new(Vec::new());
-        dynamic_image.write_to(&mut cursor, format)?;
+        image.write_to(&mut cursor, format)?;
         let written_bytes = cursor.into_inner();
 
         let cache_image_req = ImageResizedCacheRequest {
@@ -179,6 +175,24 @@ async fn resize(
 
         Ok((response_status_code, response_headers, written_bytes).into_response())
     }
+}
+
+async fn metadata(
+    State(app_components): State<AppComponents>,
+    uri: Uri,
+    Path((signature, resized_image, image_url)): Path<(Signature, ImageResizePathParam, String)>,
+) -> Result<Response, AppError> {
+    ensure_signature_is_valid(
+        &app_components.config.authentication_settings,
+        &uri,
+        signature,
+    )?;
+
+    let operations = Operations::build(&Some(resized_image.into()));
+    let metadata = MetadataResponse::build(&image_url, &operations);
+    let mut response_headers = HeaderMap::new();
+    response_headers.insert(CACHE_CONTROL, CACHE_CONTROL_HEADER_VALUE);
+    Ok((StatusCode::OK, response_headers, Json(metadata)).into_response())
 }
 
 /// Example on how to return status codes and data from an Axum function
@@ -228,7 +242,12 @@ fn ensure_signature_is_valid(
             .map(|pq| {
                 // lambda axum seems to insert empty query params when handling reqs
                 // as a lambda
-                pq.as_str().strip_suffix("?").unwrap_or(pq.as_str())
+                let pq_as_str = pq.as_str();
+                if uri.query().filter(|q| !q.trim().is_empty()).is_some() {
+                    pq_as_str
+                } else {
+                    pq_as_str.strip_suffix("?").unwrap_or(pq_as_str)
+                }
             })
             .unwrap_or("")
     };
