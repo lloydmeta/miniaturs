@@ -115,7 +115,6 @@ Use `Makefile` targets.
   * https://imgproxy.net/blog/almost-free-image-processing-with-imgproxy-and-aws-lambda/
   * https://zenn.dev/devneko/articles/0a6fb5c9ea5689
   * https://crates.io/crates/image
-* A [metadata endpoint](https://thumbor.readthedocs.io/en/stable/usage.html#metadata-endpoint)
 * [Logs, tracing](https://github.com/tokio-rs/tracing?tab=readme-ov-file#in-applications)
 * Improve image resizing:
   * Encapsulate and test
