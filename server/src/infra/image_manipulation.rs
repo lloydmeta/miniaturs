@@ -19,8 +19,8 @@ impl Operations {
 
         if let Some(image_resize) = image_resize {
             v.push(Operation::Resize {
-                width: image_resize.target_width.abs() as u32,
-                height: image_resize.target_height.abs() as u32,
+                width: image_resize.target_width.unsigned_abs(),
+                height: image_resize.target_height.unsigned_abs(),
             });
             if image_resize.target_width.is_negative() {
                 v.push(Operation::FlipHorizontally);
