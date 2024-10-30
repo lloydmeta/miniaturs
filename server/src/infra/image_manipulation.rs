@@ -3,14 +3,14 @@ use serde::{Deserialize, Serialize};
 
 use super::image_caching::ImageResize;
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum Operation {
     Resize { width: u32, height: u32 },
     FlipHorizontally,
     FlipVertically,
 }
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Clone)]
 pub struct Operations(pub Vec<Operation>);
 
 impl Operations {

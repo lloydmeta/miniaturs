@@ -47,10 +47,12 @@ mod tests {
     use http_body_util::BodyExt;
     use image::{ImageFormat, ImageReader};
     use lambda_http::tower::ServiceExt;
+    use miniaturs_server::api::responses::MetadataResponse;
     use miniaturs_server::infra::config::{
         AuthenticationSettings, AwsSettings, ImageCacheSettings,
     };
     use miniaturs_server::infra::image_caching::*;
+    use miniaturs_server::infra::image_manipulation::Operations;
     use miniaturs_shared::signature::make_url_safe_base64_hash;
     use reqwest::{header::CONTENT_TYPE, StatusCode};
     use testcontainers::{runners::AsyncRunner, ContainerAsync, ImageExt};
@@ -112,6 +114,42 @@ mod tests {
             ImageResize {
                 target_width: 500,
                 target_height: 600,
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn test_metadata_response() -> TestResult<()> {
+        test_metadata(
+            &PNG_URL_1,
+            ImageResize {
+                target_width: 100,
+                target_height: 80,
+            },
+        )
+        .await?;
+        test_metadata(
+            &PNG_URL_1,
+            ImageResize {
+                target_width: -100,
+                target_height: 80,
+            },
+        )
+        .await?;
+        test_metadata(
+            &JPG_URL_1,
+            ImageResize {
+                target_width: 100,
+                target_height: -80,
+            },
+        )
+        .await?;
+        test_metadata(
+            &PNG_URL_1,
+            ImageResize {
+                target_width: -100,
+                target_height: -80,
             },
         )
         .await
@@ -226,6 +264,45 @@ mod tests {
         Ok(())
     }
 
+    async fn test_metadata(image_url: &str, resize: ImageResize) -> TestResult<()> {
+        let signed_path =
+            signed_metadata_path(&config().await.authentication_settings, resize, image_url)?;
+        let response = app()
+            .await?
+            .oneshot(Request::builder().uri(signed_path).body(Body::empty())?)
+            .await?;
+        assert_eq!(StatusCode::OK, response.status());
+
+        let mut body_as_metadata: MetadataResponse =
+            serde_json::from_slice(response.into_body().collect().await?.to_bytes().as_ref())?;
+
+        assert_eq!(image_url, body_as_metadata.source.url);
+
+        // So we can pop easily
+        body_as_metadata.operations.reverse();
+
+        let mut op = body_as_metadata.operations.pop().unwrap();
+        assert_eq!("resize", op.r#type);
+        assert_eq!(resize.target_width.unsigned_abs(), op.width.unwrap());
+        assert_eq!(resize.target_height.unsigned_abs(), op.height.unwrap());
+
+        if resize.target_width.is_negative() {
+            op = body_as_metadata.operations.pop().unwrap();
+            assert_eq!("flip_horizontally", op.r#type);
+            assert_eq!(None, op.width);
+            assert_eq!(None, op.height);
+        }
+
+        if resize.target_height.is_negative() {
+            op = body_as_metadata.operations.pop().unwrap();
+            assert_eq!("flip_vertically", op.r#type);
+            assert_eq!(None, op.width);
+            assert_eq!(None, op.height);
+        }
+
+        Ok(())
+    }
+
     async fn retrieve_unprocessed_cached(
         image_url: &str,
     ) -> Option<Retrieved<ImageFetchedCacheRequest>> {
@@ -248,7 +325,7 @@ mod tests {
         let app_components = AppComponents::create(config.clone()).ok()?;
         let processed_cache_retrieve_req = ImageResizeRequest {
             requested_image_url: image_url.to_string(),
-            resize_target,
+            operations: Operations::build(&Some(resize_target)),
         };
         app_components
             .processed_images_cacher
@@ -265,6 +342,19 @@ mod tests {
         let target_width = resize_target.target_width;
         let target_height = resize_target.target_height;
         let path = format!("{target_width}x{target_height}/{url}");
+        let hash = make_url_safe_base64_hash(&auth_settings.shared_secret, &path)?;
+        Ok(format!("/{hash}/{path}"))
+    }
+
+    fn signed_metadata_path(
+        auth_settings: &AuthenticationSettings,
+        resize_target: ImageResize,
+
+        url: &str,
+    ) -> TestResult<String> {
+        let target_width = resize_target.target_width;
+        let target_height = resize_target.target_height;
+        let path = format!("meta/{target_width}x{target_height}/{url}");
         let hash = make_url_safe_base64_hash(&auth_settings.shared_secret, &path)?;
         Ok(format!("/{hash}/{path}"))
     }

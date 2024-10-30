@@ -11,10 +11,12 @@ use sha256;
 
 use crate::api::requests::ImageResizePathParam;
 
+use super::image_manipulation::Operations;
+
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct ImageResizeRequest {
     pub requested_image_url: String,
-    pub resize_target: ImageResize,
+    pub operations: Operations,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
@@ -274,10 +276,10 @@ mod tests {
     fn test_cache_key() -> TestResult {
         let req = ImageResizeRequest {
             requested_image_url: "https://beachape.com/images/something.png".to_string(),
-            resize_target: ImageResize {
+            operations: Operations::build(&Some(ImageResize {
                 target_width: 100,
                 target_height: 100,
-            },
+            })),
         };
         let key = req.cache_key();
         assert!(key.0.len() < 1024);
@@ -289,10 +291,10 @@ mod tests {
         let req = ImageResizedCacheRequest {
             request: ImageResizeRequest {
                 requested_image_url: "https://beachape.com/images/something.png".to_string(),
-                resize_target: ImageResize {
+                operations: Operations::build(&Some(ImageResize {
                     target_width: 100,
                     target_height: 200,
-                },
+                })),
             },
             content_type: "image/png".to_string(),
         };
@@ -317,10 +319,10 @@ mod tests {
         let req = ImageResizeRequest {
             requested_image_url: "https://beachape.com/images/something_that_does_not_exist.png"
                 .to_string(),
-            resize_target: ImageResize {
+            operations: Operations::build(&Some(ImageResize {
                 target_width: 100,
                 target_height: 100,
-            },
+            })),
         };
         let retrieved = s3_image_cacher.get(&req).await;
         assert!(retrieved.is_none());
@@ -338,10 +340,10 @@ mod tests {
 
         let req = ImageResizeRequest {
             requested_image_url: "https://beachape.com/images/something.png".to_string(),
-            resize_target: ImageResize {
+            operations: Operations::build(&Some(ImageResize {
                 target_width: 100,
                 target_height: 100,
-            },
+            })),
         };
         let content = b"testcontent";
         let image_set_req = ImageResizedCacheRequest {
@@ -368,11 +370,10 @@ mod tests {
         };
         let req = ImageResizeRequest {
             requested_image_url: "https://beachape.com/images/something_else.png".to_string(),
-
-            resize_target: ImageResize {
+            operations: Operations::build(&Some(ImageResize {
                 target_width: 300,
                 target_height: 500,
-            },
+            })),
         };
         let content = b"testcontent";
         let image_set_req = ImageResizedCacheRequest {
