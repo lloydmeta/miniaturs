@@ -315,6 +315,7 @@ mod tests {
             .unprocessed_images_cacher
             .get(&unprocessed_cache_retrieve_req)
             .await
+            .unwrap()
     }
 
     async fn retrieve_processed_cached(
@@ -331,6 +332,7 @@ mod tests {
             .processed_images_cacher
             .get(&processed_cache_retrieve_req)
             .await
+            .unwrap()
     }
 
     fn signed_resize_path(

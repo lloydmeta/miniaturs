@@ -1,7 +1,7 @@
-# Miniaturs
+# miniaturs
 [![Continuous integration](https://github.com/lloydmeta/miniaturs/actions/workflows/ci.yaml/badge.svg)](https://github.com/lloydmeta/miniaturs/actions/workflows/ci.yaml)
 
-HTTP image resizer
+Tiny HTTP image resizer.
 
 ## Goals
 
@@ -21,10 +21,10 @@ To fulfil the above:
 
 * Runs in a Lambda
 * Rust ⚡️
-* Caching in layers: CDN with S3 for images
+* Caching in layers: CDN to protect the app, with S3 for storing images
 * Serverless, but built on HTTP framework ([cargo-lambda](https://www.cargo-lambda.info) on top of [axum](https://github.com/tokio-rs/axum))
 
-An example Terraform config in `terraform/prod` is provided to show how to deploy at a subdomain using Cloudflare as our (free!) CDN + WAF.
+An example Terraform config in `terraform/prod` is provided to show how to deploy at a subdomain using Cloudflare as our ([free!](https://www.cloudflare.com/en-gb/plans/free/)) CDN + WAF with AWS Lambda and S3 ([also free!](https://aws.amazon.com/free/))
 
 ## Usage:
 

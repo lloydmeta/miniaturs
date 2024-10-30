@@ -33,7 +33,7 @@ pub struct AwsSettings {
 }
 
 impl Config {
-    pub async fn load_env() -> Result<Config, anyhow::Error> {
+    pub async fn load_env() -> anyhow::Result<Config> {
         let shared_secret = env::var(SHARED_SECRET_ENV_KEY)
             .context("Expected {SHARED_SECRET_ENV_KEY} to be defined")?;
 
