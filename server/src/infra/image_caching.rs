@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::Context;
 use aws_sdk_s3::{
     error::DisplayErrorContext,
     primitives::{ByteStream, SdkBody},
@@ -67,17 +68,17 @@ where
     GetRequest: CacheGettable<Cached = SetRequest>,
     SetRequest: CacheSettable<Retrieve = GetRequest>,
 {
-    async fn get(&self, req: &GetRequest) -> Option<Retrieved<SetRequest>>;
-    async fn set(&self, bytes: &[u8], req: &SetRequest);
+    async fn get(&self, req: &GetRequest) -> anyhow::Result<Option<Retrieved<SetRequest>>>;
+    async fn set(&self, bytes: &[u8], req: &SetRequest) -> anyhow::Result<()>;
 }
 
 pub trait CacheGettable {
     type Cached;
-    fn cache_key(&self) -> CacheKey;
+    fn cache_key(&self) -> anyhow::Result<CacheKey>;
 }
 pub trait CacheSettable: CacheGettable {
     type Retrieve;
-    fn metadata(&self) -> Metadata;
+    fn metadata(&self) -> anyhow::Result<Metadata>;
 }
 
 #[derive(Clone)]
@@ -100,8 +101,8 @@ where
     GetReq: CacheGettable<Cached = SetReq>,
     SetReq: CacheSettable<Retrieve = GetReq> + DeserializeOwned,
 {
-    async fn get(&self, req: &GetReq) -> Option<Retrieved<SetReq>> {
-        let cache_key = req.cache_key();
+    async fn get(&self, req: &GetReq) -> anyhow::Result<Option<Retrieved<SetReq>>> {
+        let cache_key = req.cache_key()?;
 
         let cache_retrieve_attempt = self
             .client
@@ -113,19 +114,24 @@ where
         match cache_retrieve_attempt {
             Ok(retreived) => {
                 // If we can't retrieve metadata, it's dead to us !
-                let s3_metadata = retreived.metadata()?.get(METADATA_JSON_KEY)?;
-                let as_original_requested = serde_json::from_str(s3_metadata).ok()?;
+                let maybe_s3_metadata = retreived.metadata().and_then(|m| m.get(METADATA_JSON_KEY));
+                let maybe_as_original_requested =
+                    maybe_s3_metadata.and_then(|m| serde_json::from_str(m).ok());
 
-                let bytes: Vec<u8> = retreived
-                    .body
-                    .collect()
-                    .await
-                    .expect("Failure to retrieve from S3")
-                    .to_vec();
-
-                Some(Retrieved {
-                    bytes,
-                    requested: as_original_requested,
+                Ok(match maybe_as_original_requested {
+                    Some(as_original_requested) => {
+                        let bytes: Vec<u8> = retreived
+                            .body
+                            .collect()
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Failure to retrieve from S3 [{e}]"))?
+                            .to_vec();
+                        Some(Retrieved {
+                            bytes,
+                            requested: as_original_requested,
+                        })
+                    }
+                    None => None,
                 })
             }
             Err(sdk_err)
@@ -134,18 +140,18 @@ where
                     .filter(|e| e.is_no_such_key())
                     .is_some() =>
             {
-                None
+                Ok(None)
             }
             // Anything else is fucked.
-            Err(other) => panic!("AWS S3 SDK error: [{}]", DisplayErrorContext(other)),
+            Err(other) => anyhow::bail!("AWS S3 SDK error: [{}]", DisplayErrorContext(other)),
         }
     }
 
-    async fn set(&self, bytes: &[u8], req: &SetReq) {
+    async fn set(&self, bytes: &[u8], req: &SetReq) -> anyhow::Result<()> {
         let body_stream = ByteStream::new(SdkBody::from(bytes));
 
-        let metadata = req.metadata();
-        let cache_key = req.cache_key();
+        let metadata = req.metadata()?;
+        let cache_key = req.cache_key()?;
 
         self.client
             .put_object()
@@ -155,7 +161,8 @@ where
             .body(body_stream)
             .send()
             .await
-            .expect("Writing to S3 failed.");
+            .map_err(|e| anyhow::anyhow!("Writing to S3 failed [{e}]"))?;
+        Ok(())
     }
 }
 
@@ -166,49 +173,51 @@ pub struct CacheKey(String);
 static METADATA_JSON_KEY: &str = "_metadata_json";
 impl CacheGettable for ImageResizeRequest {
     type Cached = ImageResizedCacheRequest;
-    fn cache_key(&self) -> CacheKey {
-        let as_json = serde_json::to_string(self).expect("Could not JSON-ify, oddly");
+    fn cache_key(&self) -> anyhow::Result<CacheKey> {
+        let as_json = serde_json::to_string(self).context("Could not JSON-ify to cache key.")?;
         let sha256ed = sha256::digest(as_json);
-        CacheKey(sha256ed)
+        Ok(CacheKey(sha256ed))
     }
 }
 impl CacheGettable for ImageResizedCacheRequest {
     type Cached = Self;
-    fn cache_key(&self) -> CacheKey {
+    fn cache_key(&self) -> anyhow::Result<CacheKey> {
         self.request.cache_key()
     }
 }
 impl CacheSettable for ImageResizedCacheRequest {
     type Retrieve = ImageResizeRequest;
-    fn metadata(&self) -> Metadata {
-        let as_json_string = serde_json::to_string(self).expect("Could not JSON-ify, oddly");
+    fn metadata(&self) -> anyhow::Result<Metadata> {
+        let as_json_string =
+            serde_json::to_string(self).context("Could not JSON-ify to metadata.")?;
         let mut map = HashMap::new();
         map.insert(METADATA_JSON_KEY.to_string(), as_json_string);
-        Metadata(map)
+        Ok(Metadata(map))
     }
 }
 
 impl CacheGettable for ImageFetchRequest {
     type Cached = ImageFetchedCacheRequest;
-    fn cache_key(&self) -> CacheKey {
-        let as_json = serde_json::to_string(self).expect("Could not JSON-ify, oddly");
+    fn cache_key(&self) -> anyhow::Result<CacheKey> {
+        let as_json = serde_json::to_string(self).context("Could not JSON-ify to cache key.")?;
         let sha256ed = sha256::digest(as_json);
-        CacheKey(sha256ed)
+        Ok(CacheKey(sha256ed))
     }
 }
 impl CacheGettable for ImageFetchedCacheRequest {
     type Cached = Self;
-    fn cache_key(&self) -> CacheKey {
+    fn cache_key(&self) -> anyhow::Result<CacheKey> {
         self.request.cache_key()
     }
 }
 impl CacheSettable for ImageFetchedCacheRequest {
     type Retrieve = ImageFetchRequest;
-    fn metadata(&self) -> Metadata {
-        let as_json_string = serde_json::to_string(self).expect("Could not JSON-ify, oddly");
+    fn metadata(&self) -> anyhow::Result<Metadata> {
+        let as_json_string =
+            serde_json::to_string(self).context("Could not JSON-ify to metadata.")?;
         let mut map = HashMap::new();
         map.insert(METADATA_JSON_KEY.to_string(), as_json_string);
-        Metadata(map)
+        Ok(Metadata(map))
     }
 }
 
@@ -281,7 +290,7 @@ mod tests {
                 target_height: 100,
             })),
         };
-        let key = req.cache_key();
+        let key = req.cache_key()?;
         assert!(key.0.len() < 1024);
         Ok(())
     }
@@ -298,7 +307,7 @@ mod tests {
             },
             content_type: "image/png".to_string(),
         };
-        let metadata = req.metadata();
+        let metadata = req.metadata()?;
 
         let mut expected = HashMap::new();
         let metadata_as_json = serde_json::to_string(&req).unwrap();
@@ -325,7 +334,7 @@ mod tests {
             })),
         };
         let retrieved = s3_image_cacher.get(&req).await;
-        assert!(retrieved.is_none());
+        assert!(retrieved?.is_none());
         Ok(())
     }
 
@@ -350,10 +359,10 @@ mod tests {
             request: req.clone(),
             content_type: "image/png".to_string(),
         };
-        s3_image_cacher.set(content, &image_set_req).await;
+        s3_image_cacher.set(content, &image_set_req).await?;
         let retrieved = s3_image_cacher
             .get(&req)
-            .await
+            .await?
             .expect("Cached image should be retrievable");
         assert_eq!(content, retrieved.bytes.as_slice());
         assert_eq!(image_set_req, retrieved.requested);
@@ -380,10 +389,10 @@ mod tests {
             request: req.clone(),
             content_type: "image/png".to_string(),
         };
-        s3_image_cacher.set(content, &image_set_req).await;
+        s3_image_cacher.set(content, &image_set_req).await?;
 
-        let cache_key = req.cache_key();
-        let metadata_from_req = image_set_req.metadata();
+        let cache_key = req.cache_key()?;
+        let metadata_from_req = image_set_req.metadata()?;
 
         let retrieved = s3_client()
             .await

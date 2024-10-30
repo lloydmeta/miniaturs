@@ -72,7 +72,7 @@ async fn resize(
     let maybe_cached_resized_image = app_components
         .processed_images_cacher
         .get(&processed_image_request)
-        .await;
+        .await?;
 
     if let Some(cached_resized_image) = maybe_cached_resized_image {
         let mut response_headers = HeaderMap::new();
@@ -91,7 +91,7 @@ async fn resize(
         let maybe_cached_fetched_image = app_components
             .unprocessed_images_cacher
             .get(&unprocessed_cache_retrieve_req)
-            .await;
+            .await?;
 
         let (response_status_code, bytes, maybe_content_type_string) =
             if let Some(cached_fetched) = maybe_cached_fetched_image {
@@ -117,7 +117,7 @@ async fn resize(
                 app_components
                     .unprocessed_images_cacher
                     .set(&bytes, &cache_fetched_req)
-                    .await;
+                    .await?;
 
                 let response_status_code = StatusCode::from_u16(status_code.as_u16())?;
                 (response_status_code, bytes, maybe_content_type_string)
@@ -161,7 +161,7 @@ async fn resize(
         app_components
             .processed_images_cacher
             .set(&written_bytes, &cache_image_req)
-            .await;
+            .await?;
 
         let mut response_headers = HeaderMap::new();
         let maybe_content_type_header = maybe_content_type_string
@@ -305,7 +305,9 @@ fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response<Full<Bytes>> {
 
     let error = Standard { message: details };
 
-    let body = serde_json::to_string(&error).expect("Could not marshal error message");
+    let body = serde_json::to_string(&error).unwrap_or_else(|e| {
+        format!("{{\"message\": \"Could not serialise error message [{e}]\"}}")
+    });
 
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
