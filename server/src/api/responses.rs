@@ -54,7 +54,9 @@ pub struct Source {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct Operation {
     pub r#type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
 }
 

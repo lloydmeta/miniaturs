@@ -26,6 +26,14 @@ To fulfil the above:
 
 An example Terraform config in `terraform/prod` is provided to show how to deploy at a subdomain using Cloudflare as our (free!) CDN + WAF.
 
+## Usage:
+
+We only support resizing at the moment
+
+1. An "image" endpoint [a la Thumbor](https://thumbor.readthedocs.io/en/latest/usage.html#image-endpoint)
+2. A "metadata" endpoint [a la Thumbor](https://thumbor.readthedocs.io/en/latest/usage.html#metadata-endpoint)
+    * Difference: target image size is _not_ returned (might change in the future)
+
 ## Flow
 
 1. Layer 1 validations (is the request well-formed?)
