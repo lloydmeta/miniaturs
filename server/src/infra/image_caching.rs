@@ -228,24 +228,18 @@ mod tests {
 
     use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
     use aws_sdk_s3::{self as s3, primitives::ByteStream};
-    use testcontainers::{runners::AsyncRunner, ContainerAsync, ImageExt};
-    use testcontainers_modules::localstack::LocalStack;
     use tokio::sync::OnceCell;
 
     use super::*;
+    use crate::test_utils::{localstack_node, TestResult};
 
-    // Holds the shared Localstack container; if it's not held here, the container ref gets dropped and the _actual_ container
-    // gets stopped
-    static LOCALSTACK_NODE: OnceCell<ContainerAsync<LocalStack>> = OnceCell::const_new();
     // Holds the shared S3 client that refers to the above; use `s3_client().await` to get it
     static S3_CLIENT: OnceCell<s3::Client> = OnceCell::const_new();
     // Bucket, static because we assume the app is passed a created one.
     static S3_BUCKET: OnceCell<String> = OnceCell::const_new();
 
-    type TestResult = Result<(), Box<dyn std::error::Error + 'static>>;
-
     #[tokio::test]
-    async fn test_s3() -> TestResult {
+    async fn test_s3() -> TestResult<()> {
         let client = s3_client().await;
 
         let bucket = "mybucket";
@@ -282,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_key() -> TestResult {
+    fn test_cache_key() -> TestResult<()> {
         let req = ImageResizeRequest {
             requested_image_url: "https://beachape.com/images/something.png".to_string(),
             operations: Operations::build(&Some(ImageResize {
@@ -296,7 +290,7 @@ mod tests {
     }
 
     #[test]
-    fn test_metadata() -> TestResult {
+    fn test_metadata() -> TestResult<()> {
         let req = ImageResizedCacheRequest {
             request: ImageResizeRequest {
                 requested_image_url: "https://beachape.com/images/something.png".to_string(),
@@ -318,7 +312,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_s3_image_cacher_get_does_not_exist() -> TestResult {
+    async fn test_s3_image_cacher_get_does_not_exist() -> TestResult<()> {
         let client = s3_client().await.clone();
         let bucket_name = s3_bucket().await.clone();
         let s3_image_cacher = S3ImageCacher {
@@ -339,7 +333,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_s3_image_cacher_set_get() -> TestResult {
+    async fn test_s3_image_cacher_set_get() -> TestResult<()> {
         let client = s3_client().await.clone();
         let bucket_name = s3_bucket().await.clone();
         let s3_image_cacher = S3ImageCacher {
@@ -370,7 +364,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_s3_image_cacher_setting_metadata_in_s3() -> TestResult {
+    async fn test_s3_image_cacher_setting_metadata_in_s3() -> TestResult<()> {
         let client = s3_client().await.clone();
         let bucket_name = s3_bucket().await.clone();
         let s3_image_cacher = S3ImageCacher {
@@ -430,15 +424,7 @@ mod tests {
     async fn s3_client() -> &'static s3::Client {
         S3_CLIENT
             .get_or_init(|| async {
-                let node = LOCALSTACK_NODE
-                    .get_or_init(|| async {
-                        LocalStack::default()
-                            .with_env_var("SERVICES", "s3")
-                            .start()
-                            .await
-                            .expect("Localstack to start properly")
-                    })
-                    .await;
+                let node = localstack_node().await;
                 let host_port = node
                     .get_host_port_ipv4(4566)
                     .await
