@@ -11,7 +11,7 @@ mod integration_tests {
     use crate::api::routing::handlers::create_router;
     use crate::infra::components::AppComponents;
     use crate::infra::config::Config;
-    use crate::test_utils::{localstack_node, TestResult};
+    use crate::test_utils::{localstack_node, s3_client, TestResult};
 
     use super::api::responses::MetadataResponse;
     use super::infra::config::{AuthenticationSettings, AwsSettings, ImageCacheSettings};
@@ -29,8 +29,6 @@ mod integration_tests {
     static UNPROCESSED_BUCKET: OnceCell<String> = OnceCell::const_new();
     static PROCESSED_BUCKET: OnceCell<String> = OnceCell::const_new();
     static CONFIG: OnceCell<Config> = OnceCell::const_new();
-    // Used for setting up buckets only...
-    static BOOTSTRAP_S3_CLIENT: OnceCell<aws_sdk_s3::Client> = OnceCell::const_new();
     static AWS_CONFIG: OnceCell<aws_config::SdkConfig> = OnceCell::const_new();
 
     #[tokio::test]
@@ -386,12 +384,7 @@ mod integration_tests {
     }
 
     async fn bootstrap_s3_client() -> &'static aws_sdk_s3::Client {
-        BOOTSTRAP_S3_CLIENT
-            .get_or_init(|| async {
-                let config = aws_config().await;
-                aws_sdk_s3::Client::new(&config)
-            })
-            .await
+        s3_client().await
     }
 
     async fn aws_config() -> &'static aws_config::SdkConfig {

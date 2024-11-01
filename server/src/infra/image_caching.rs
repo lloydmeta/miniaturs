@@ -226,15 +226,12 @@ mod tests {
 
     use std::collections::HashMap;
 
-    use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
-    use aws_sdk_s3::{self as s3, primitives::ByteStream};
+    use aws_sdk_s3::primitives::ByteStream;
     use tokio::sync::OnceCell;
 
     use super::*;
-    use crate::test_utils::{localstack_node, TestResult};
+    use crate::test_utils::{s3_client, TestResult};
 
-    // Holds the shared S3 client that refers to the above; use `s3_client().await` to get it
-    static S3_CLIENT: OnceCell<s3::Client> = OnceCell::const_new();
     // Bucket, static because we assume the app is passed a created one.
     static S3_BUCKET: OnceCell<String> = OnceCell::const_new();
 
@@ -417,30 +414,6 @@ mod tests {
                     .await
                     .expect("Bucket creation should work");
                 BUCKET_NAME.to_string()
-            })
-            .await
-    }
-
-    async fn s3_client() -> &'static s3::Client {
-        S3_CLIENT
-            .get_or_init(|| async {
-                let node = localstack_node().await;
-                let host_port = node
-                    .get_host_port_ipv4(4566)
-                    .await
-                    .expect("Port from Localstack to be retrievable");
-
-                let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
-                let region = region_provider.region().await.unwrap();
-                let creds = s3::config::Credentials::new("fake", "fake", None, None, "test");
-                let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
-                    .region(region.clone())
-                    .credentials_provider(creds)
-                    .endpoint_url(format!("http://127.0.0.1:{host_port}"))
-                    .load()
-                    .await;
-
-                s3::Client::new(&config)
             })
             .await
     }
