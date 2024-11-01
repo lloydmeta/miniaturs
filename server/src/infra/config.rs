@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::Context;
 use aws_config::{BehaviorVersion, SdkConfig};
+use bytesize::ByteSize;
 
 const SHARED_SECRET_ENV_KEY: &str = "MINIATURS_SHARED_SECRET";
 const PROCESSED_IMAGES_BUCKET_NAME_ENV_KEY: &str = "PROCESSED_IMAGES_BUCKET";
@@ -14,6 +15,8 @@ const MAX_RESIZE_TARGET_WIDTH: &str = "MAX_RESIZE_TARGET_WIDTH";
 const MAX_RESIZE_TARGET_HEIGHT: &str = "MAX_RESIZE_TARGET_HEIGHT";
 const MAX_SOURCE_IMAGE_WIDTH: &str = "MAX_SOURCE_IMAGE_WIDTH";
 const MAX_SOURCE_IMAGE_HEIGHT: &str = "MAX_SOURCE_IMAGE_HEIGHT";
+const MAX_IMAGE_DOWNLOAD_SIZE_KEY: &str = "MAX_IMAGE_DOWNLOAD_SIZE";
+const MAX_IMAGE_FILE_SIZE_KEY: &str = "MAX_IMAGE_FILE_SIZE";
 
 #[derive(Clone)]
 pub struct Config {
@@ -50,9 +53,15 @@ pub struct ValidationSettings {
     pub max_source_image_width: u32,
     // Max height the source image can have (pixels)
     pub max_source_image_height: u32,
+    // Max image download size
+    pub max_source_image_download_size: ByteSize,
+    // Max image size
+    pub max_source_image_size: ByteSize,
 }
 
 static MAX_PIXELS_DEFAULT: u32 = 10000;
+static MAX_IMAGE_DOWNLOAD_SIZE: ByteSize = ByteSize::mb(10);
+static MAX_IMAGE_FILE_SIZE: ByteSize = ByteSize::mb(10);
 
 impl Default for ValidationSettings {
     fn default() -> Self {
@@ -61,6 +70,8 @@ impl Default for ValidationSettings {
             max_resize_target_height: MAX_PIXELS_DEFAULT,
             max_source_image_width: MAX_PIXELS_DEFAULT,
             max_source_image_height: MAX_PIXELS_DEFAULT,
+            max_source_image_download_size: MAX_IMAGE_DOWNLOAD_SIZE,
+            max_source_image_size: MAX_IMAGE_FILE_SIZE,
         }
     }
 }
@@ -106,6 +117,12 @@ impl Config {
         if let Some(max_source_image_height) = read_env_var(MAX_SOURCE_IMAGE_HEIGHT)? {
             validation_settings.max_source_image_height = max_source_image_height;
         }
+        if let Some(max_source_image_download_size) = read_env_var(MAX_IMAGE_DOWNLOAD_SIZE_KEY)? {
+            validation_settings.max_source_image_download_size = max_source_image_download_size;
+        }
+        if let Some(max_source_image_size) = read_env_var(MAX_IMAGE_FILE_SIZE_KEY)? {
+            validation_settings.max_source_image_size = max_source_image_size;
+        }
 
         Ok(Config {
             authentication_settings,
@@ -119,15 +136,15 @@ impl Config {
 fn read_env_var<T>(env_var_key: &str) -> anyhow::Result<Option<T>>
 where
     T: FromStr,
-    <T as FromStr>::Err: std::error::Error,
+    <T as FromStr>::Err: ToString,
 {
     match env::var(env_var_key) {
         Err(VarError::NotPresent) => Ok(None),
         Err(VarError::NotUnicode(s)) => Err(anyhow::anyhow!(
             "Could not decode env var {env_var_key} [{s:?}]"
         )),
-        Ok(s) => Ok(Some(s.parse().map_err(|e| {
-            anyhow::anyhow!("Could not convert {env_var_key}: [{e}]")
+        Ok(s) => Ok(Some(s.parse().map_err(|e: <T as FromStr>::Err| {
+            anyhow::anyhow!("Could not convert {env_var_key}: [{}]", e.to_string())
         })?)),
     }
 }

@@ -7,8 +7,9 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::{Html, IntoResponse, Response};
 use axum::{response::Json, routing::*, Router};
 
+use bytesize::ByteSize;
 use image::{ImageFormat, ImageReader};
-use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE};
+use reqwest::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE};
 use responses::Standard;
 use tower_http::catch_panic::CatchPanicLayer;
 
@@ -22,7 +23,7 @@ use crate::infra::image_caching::{
     ImageResizedCacheRequest,
 };
 use crate::infra::image_manipulation::{Operations, OperationsRunner, SingletonOperationsRunner};
-use crate::infra::validations::{SimpleValidator, Validator};
+use crate::infra::validations::{SingletonValidator, Validator};
 
 use miniaturs_shared::signature::{ensure_signature_is_valid_for_path_and_query, SignatureError};
 
@@ -55,8 +56,9 @@ async fn resize(
         &uri,
         signature,
     )?;
+    let validation_settings = &app_components.config.validation_settings;
     let operations = Operations::build(&Some(resized_image.into()));
-    SimpleValidator.validate_operations(&app_components.config.validation_settings, &operations)?;
+    SingletonValidator.validate_operations(validation_settings, &operations)?;
     let processed_image_request = {
         ImageResizeRequest {
             requested_image_url: image_url.clone(),
@@ -87,35 +89,49 @@ async fn resize(
             .get(&unprocessed_cache_retrieve_req)
             .await?;
 
-        let (response_status_code, bytes, maybe_content_type_string) =
-            if let Some(cached_fetched) = maybe_cached_fetched_image {
-                (
-                    StatusCode::OK,
-                    cached_fetched.bytes,
-                    cached_fetched.requested.content_type,
-                )
-            } else {
-                let mut proxy_response = app_components.http_client.get(&image_url).send().await?;
-                let status_code = proxy_response.status();
-                let headers = proxy_response.headers_mut();
-                let maybe_content_type = headers.remove(CONTENT_TYPE);
+        let (response_status_code, bytes, maybe_content_type_string) = if let Some(cached_fetched) =
+            maybe_cached_fetched_image
+        {
+            (
+                StatusCode::OK,
+                cached_fetched.bytes,
+                cached_fetched.requested.content_type,
+            )
+        } else {
+            let mut proxy_response = app_components.http_client.get(&image_url).send().await?;
+            let status_code = proxy_response.status();
+            let headers = proxy_response.headers_mut();
 
-                let maybe_content_type_string =
-                    maybe_content_type.and_then(|h| h.to_str().map(|s| s.to_string()).ok());
+            let maybe_content_length = headers.remove(CONTENT_LENGTH);
+            let maybe_content_length_bytesize =
+                maybe_content_length.and_then(|h| h.to_str().ok()?.parse().ok());
 
-                let cache_fetched_req = ImageFetchedCacheRequest {
-                    request: unprocessed_cache_retrieve_req,
-                    content_type: maybe_content_type_string.clone(),
-                };
-                let bytes: Vec<_> = proxy_response.bytes().await?.into();
-                app_components
-                    .unprocessed_images_cacher
-                    .set(&bytes, &cache_fetched_req)
-                    .await?;
+            if let Some(content_length_bytesize) = maybe_content_length_bytesize {
+                SingletonValidator
+                    .validate_image_download_size(validation_settings, content_length_bytesize)?;
+            }
 
-                let response_status_code = StatusCode::from_u16(status_code.as_u16())?;
-                (response_status_code, bytes, maybe_content_type_string)
+            let maybe_content_type = headers.remove(CONTENT_TYPE);
+
+            let maybe_content_type_string =
+                maybe_content_type.and_then(|h| h.to_str().map(|s| s.to_string()).ok());
+
+            let cache_fetched_req = ImageFetchedCacheRequest {
+                request: unprocessed_cache_retrieve_req,
+                content_type: maybe_content_type_string.clone(),
             };
+            let bytes: Vec<_> = proxy_response.bytes().await?.into();
+
+            SingletonValidator
+                .validate_image_size(validation_settings, ByteSize::b(bytes.len() as u64))?;
+            app_components
+                .unprocessed_images_cacher
+                .set(&bytes, &cache_fetched_req)
+                .await?;
+
+            let response_status_code = StatusCode::from_u16(status_code.as_u16())?;
+            (response_status_code, bytes, maybe_content_type_string)
+        };
 
         let mut image_reader = ImageReader::new(Cursor::new(bytes));
 
@@ -136,8 +152,7 @@ async fn resize(
             .ok_or(AppError::UnableToDetermineFormat)?;
 
         let original_image = reader_with_format.decode()?;
-        SimpleValidator
-            .validate_source_image(&app_components.config.validation_settings, &original_image)?;
+        SingletonValidator.validate_source_image(validation_settings, &original_image)?;
 
         let image = SingletonOperationsRunner
             .run(original_image, &processed_image_request.operations)
@@ -187,7 +202,8 @@ async fn metadata(
     let mut response_headers = HeaderMap::new();
     response_headers.insert(CACHE_CONTROL, CACHE_CONTROL_HEADER_VALUE);
 
-    SimpleValidator.validate_operations(&app_components.config.validation_settings, &operations)?;
+    SingletonValidator
+        .validate_operations(&app_components.config.validation_settings, &operations)?;
 
     let metadata = MetadataResponse::build(&image_url, &operations);
     Ok((StatusCode::OK, response_headers, Json(metadata)).into_response())

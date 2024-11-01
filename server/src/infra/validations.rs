@@ -1,3 +1,4 @@
+use bytesize::ByteSize;
 use image::DynamicImage;
 
 use super::{config::ValidationSettings, image_manipulation::Operations};
@@ -14,13 +15,25 @@ pub trait Validator {
         settings: &ValidationSettings,
         image: &DynamicImage,
     ) -> Result<(), ValidationErrors>;
+
+    fn validate_image_download_size(
+        &self,
+        settings: &ValidationSettings,
+        image_download_size: ByteSize,
+    ) -> Result<(), ValidationErrors>;
+
+    fn validate_image_size(
+        &self,
+        settings: &ValidationSettings,
+        image_: ByteSize,
+    ) -> Result<(), ValidationErrors>;
 }
 
-pub struct SimpleValidator;
+pub struct SingletonValidator;
 
 pub struct ValidationErrors(pub Vec<String>);
 
-impl Validator for SimpleValidator {
+impl Validator for SingletonValidator {
     fn validate_operations(
         &self,
         settings: &ValidationSettings,
@@ -63,14 +76,14 @@ impl Validator for SimpleValidator {
         let mut problems = Vec::new();
         if image.width() > settings.max_source_image_width {
             problems.push(format!(
-                "Source image width [{}] to large, must be [{}] or lower",
+                "Source image width [{}] too large, must be [{}] or lower",
                 image.width(),
                 settings.max_source_image_width
             ));
         }
         if image.height() > settings.max_source_image_height {
             problems.push(format!(
-                "Source image height [{}] to large, must be [{}] or lower",
+                "Source image height [{}] too large, must be [{}] or lower",
                 image.height(),
                 settings.max_source_image_height
             ));
@@ -79,6 +92,36 @@ impl Validator for SimpleValidator {
             Ok(())
         } else {
             Err(ValidationErrors(problems))
+        }
+    }
+
+    fn validate_image_download_size(
+        &self,
+        settings: &ValidationSettings,
+        image_download_size: ByteSize,
+    ) -> Result<(), ValidationErrors> {
+        if image_download_size > settings.max_source_image_download_size {
+            Err(ValidationErrors(vec![format!(
+                "Image download size [{image_download_size}] is too large, must be [{}] or lower",
+                settings.max_source_image_download_size
+            )]))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_image_size(
+        &self,
+        settings: &ValidationSettings,
+        image_size: ByteSize,
+    ) -> Result<(), ValidationErrors> {
+        if image_size > settings.max_source_image_size {
+            Err(ValidationErrors(vec![format!(
+                "Image size [{image_size}] is too large, must be [{}] or lower",
+                settings.max_source_image_size
+            )]))
+        } else {
+            Ok(())
         }
     }
 }
@@ -91,7 +134,7 @@ mod tests {
     fn test_empty_operations_validation() {
         let settings = ValidationSettings::default();
         let operations = Operations(vec![]);
-        assert!(SimpleValidator
+        assert!(SingletonValidator
             .validate_operations(&settings, &operations)
             .is_ok());
     }
@@ -107,7 +150,7 @@ mod tests {
             crate::infra::image_manipulation::Operation::FlipHorizontally,
             crate::infra::image_manipulation::Operation::FlipVertically,
         ]);
-        assert!(SimpleValidator
+        assert!(SingletonValidator
             .validate_operations(&settings, &operations)
             .is_ok());
     }
@@ -123,7 +166,7 @@ mod tests {
             crate::infra::image_manipulation::Operation::FlipHorizontally,
             crate::infra::image_manipulation::Operation::FlipVertically,
         ]);
-        let r = SimpleValidator.validate_operations(&settings, &operations);
+        let r = SingletonValidator.validate_operations(&settings, &operations);
         let errors = r.err().unwrap();
 
         assert_eq!(1, errors.0.len());
@@ -141,7 +184,7 @@ mod tests {
             crate::infra::image_manipulation::Operation::FlipHorizontally,
             crate::infra::image_manipulation::Operation::FlipVertically,
         ]);
-        let r = SimpleValidator.validate_operations(&settings, &operations);
+        let r = SingletonValidator.validate_operations(&settings, &operations);
         let errors = r.err().unwrap();
 
         assert_eq!(1, errors.0.len());
@@ -159,7 +202,7 @@ mod tests {
             crate::infra::image_manipulation::Operation::FlipHorizontally,
             crate::infra::image_manipulation::Operation::FlipVertically,
         ]);
-        let r = SimpleValidator.validate_operations(&settings, &operations);
+        let r = SingletonValidator.validate_operations(&settings, &operations);
         let errors = r.err().unwrap();
 
         assert_eq!(2, errors.0.len());
@@ -175,7 +218,7 @@ mod tests {
             settings.max_source_image_height,
             image::ColorType::Rgb8,
         );
-        assert!(SimpleValidator
+        assert!(SingletonValidator
             .validate_source_image(&settings, &image)
             .is_ok());
     }
@@ -188,7 +231,7 @@ mod tests {
             settings.max_source_image_height,
             image::ColorType::Rgb8,
         );
-        let r = SimpleValidator.validate_source_image(&settings, &image);
+        let r = SingletonValidator.validate_source_image(&settings, &image);
         let err = r.err().unwrap();
         assert_eq!(1, err.0.len());
         assert!(err.0[0].starts_with("Source image width"));
@@ -202,7 +245,7 @@ mod tests {
             settings.max_source_image_height + 1,
             image::ColorType::Rgb8,
         );
-        let r = SimpleValidator.validate_source_image(&settings, &image);
+        let r = SingletonValidator.validate_source_image(&settings, &image);
         let err = r.err().unwrap();
         assert_eq!(1, err.0.len());
         assert!(err.0[0].starts_with("Source image height"));
@@ -216,10 +259,47 @@ mod tests {
             settings.max_source_image_height + 1,
             image::ColorType::Rgb8,
         );
-        let r = SimpleValidator.validate_source_image(&settings, &image);
+        let r = SingletonValidator.validate_source_image(&settings, &image);
         let err = r.err().unwrap();
         assert_eq!(2, err.0.len());
         assert!(err.0[0].starts_with("Source image width"));
         assert!(err.0[1].starts_with("Source image height"));
+    }
+
+    #[test]
+    fn test_image_download_size_validation_ok() {
+        let settings = ValidationSettings::default();
+        let r = SingletonValidator
+            .validate_image_download_size(&settings, settings.max_source_image_download_size);
+        assert!(r.is_ok());
+    }
+    #[test]
+    fn test_image_download_size_validation_err() {
+        let settings = ValidationSettings::default();
+        let r = SingletonValidator.validate_image_download_size(
+            &settings,
+            settings.max_source_image_download_size + ByteSize::b(1),
+        );
+        assert!(r.is_err());
+        let err = r.err().unwrap();
+        assert_eq!(1, err.0.len());
+        assert!(err.0[0].starts_with("Image download size"));
+    }
+    #[test]
+    fn test_image_size_validation_ok() {
+        let settings = ValidationSettings::default();
+        let r = SingletonValidator.validate_image_size(&settings, settings.max_source_image_size);
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_image_size_validation_err() {
+        let settings = ValidationSettings::default();
+        let r = SingletonValidator
+            .validate_image_size(&settings, settings.max_source_image_size + ByteSize::b(1));
+        assert!(r.is_err());
+        let err = r.err().unwrap();
+        assert_eq!(1, err.0.len());
+        assert!(err.0[0].starts_with("Image size"));
     }
 }
