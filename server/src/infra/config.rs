@@ -12,8 +12,8 @@ const UNPROCESSED_IMAGES_BUCKET_NAME_ENV_KEY: &str = "UNPROCESSED_IMAGES_BUCKET"
 const REQUIRE_PATH_STYLE_S3_KEY: &str = "REQUIRE_PATH_STYLE_S3";
 const MAX_RESIZE_TARGET_WIDTH: &str = "MAX_RESIZE_TARGET_WIDTH";
 const MAX_RESIZE_TARGET_HEIGHT: &str = "MAX_RESIZE_TARGET_HEIGHT";
-const MAX_SOURCE_TARGET_WIDTH: &str = "MAX_SOURCE_TARGET_WIDTH";
-const MAX_SOURCE_TARGET_HEIGHT: &str = "MAX_SOURCE_TARGET_HEIGHT";
+const MAX_SOURCE_IMAGE_WIDTH: &str = "MAX_SOURCE_IMAGE_WIDTH";
+const MAX_SOURCE_IMAGE_HEIGHT: &str = "MAX_SOURCE_IMAGE_HEIGHT";
 
 #[derive(Clone)]
 pub struct Config {
@@ -100,10 +100,10 @@ impl Config {
         if let Some(max_resize_target_height) = read_env_var(MAX_RESIZE_TARGET_HEIGHT)? {
             validation_settings.max_resize_target_height = max_resize_target_height;
         }
-        if let Some(max_source_image_width) = read_env_var(MAX_SOURCE_TARGET_WIDTH)? {
+        if let Some(max_source_image_width) = read_env_var(MAX_SOURCE_IMAGE_WIDTH)? {
             validation_settings.max_source_image_width = max_source_image_width;
         }
-        if let Some(max_source_image_height) = read_env_var(MAX_SOURCE_TARGET_HEIGHT)? {
+        if let Some(max_source_image_height) = read_env_var(MAX_SOURCE_IMAGE_HEIGHT)? {
             validation_settings.max_source_image_height = max_source_image_height;
         }
 

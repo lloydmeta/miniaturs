@@ -44,8 +44,8 @@ miniaturs relies on environment variables for configuration. These include
 * `REQUIRE_PATH_STYLE_S3`     : optional, whether to use "path style" S3 addressing (for local testing), defaults to false.
 * `MAX_RESIZE_TARGET_WIDTH`   : optional, max resize-to image width, defaults to 10,000 (pixels)
 * `MAX_RESIZE_TARGET_HEIGHT`  : optional, max resize-to image height, defaults to 10,000 (pixels)
-* `MAX_SOURCE_TARGET_WIDTH`   : optional, max source image width, defaults to 10,000 (pixels)
-* `MAX_SOURCE_TARGET_HEIGHT`  : optional, max source image height, defaults to 10,000 (pixels)
+* `MAX_SOURCE_IMAGE_WIDTH`   : optional, max source image width, defaults to 10,000 (pixels)
+* `MAX_SOURCE_IMAGE_HEIGHT`  : optional, max source image height, defaults to 10,000 (pixels)
 
 ## Flow
 
