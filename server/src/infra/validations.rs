@@ -113,7 +113,43 @@ mod tests {
     }
 
     #[test]
-    fn test_non_empty_vad_operations_validation() {
+    fn test_non_empty_bad_operations_validation_1() {
+        let settings = ValidationSettings::default();
+        let operations = Operations(vec![
+            crate::infra::image_manipulation::Operation::Resize {
+                width: settings.max_resize_target_width + 1,
+                height: settings.max_resize_target_height,
+            },
+            crate::infra::image_manipulation::Operation::FlipHorizontally,
+            crate::infra::image_manipulation::Operation::FlipVertically,
+        ]);
+        let r = SimpleValidator.validate_operations(&settings, &operations);
+        let errors = r.err().unwrap();
+
+        assert_eq!(1, errors.0.len());
+        assert!(errors.0[0].starts_with("Resize target width"));
+    }
+
+    #[test]
+    fn test_non_empty_bad_operations_validation_2() {
+        let settings = ValidationSettings::default();
+        let operations = Operations(vec![
+            crate::infra::image_manipulation::Operation::Resize {
+                width: settings.max_resize_target_width,
+                height: settings.max_resize_target_height + 1,
+            },
+            crate::infra::image_manipulation::Operation::FlipHorizontally,
+            crate::infra::image_manipulation::Operation::FlipVertically,
+        ]);
+        let r = SimpleValidator.validate_operations(&settings, &operations);
+        let errors = r.err().unwrap();
+
+        assert_eq!(1, errors.0.len());
+        assert!(errors.0[0].starts_with("Resize target height"));
+    }
+
+    #[test]
+    fn test_non_empty_bad_operations_validation_3() {
         let settings = ValidationSettings::default();
         let operations = Operations(vec![
             crate::infra::image_manipulation::Operation::Resize {
@@ -124,12 +160,11 @@ mod tests {
             crate::infra::image_manipulation::Operation::FlipVertically,
         ]);
         let r = SimpleValidator.validate_operations(&settings, &operations);
-        assert!(r.is_err());
-        if let Err(problems) = r {
-            assert_eq!(2, problems.0.len());
-        } else {
-            panic!("Fail")
-        }
+        let errors = r.err().unwrap();
+
+        assert_eq!(2, errors.0.len());
+        assert!(errors.0[0].starts_with("Resize target width"));
+        assert!(errors.0[1].starts_with("Resize target height"));
     }
 
     #[test]
@@ -146,7 +181,35 @@ mod tests {
     }
 
     #[test]
-    fn test_non_empty_bad_image_validation() {
+    fn test_non_empty_bad_image_validation_1() {
+        let settings = ValidationSettings::default();
+        let image = DynamicImage::new(
+            settings.max_source_image_width + 1,
+            settings.max_source_image_height,
+            image::ColorType::Rgb8,
+        );
+        let r = SimpleValidator.validate_source_image(&settings, &image);
+        let err = r.err().unwrap();
+        assert_eq!(1, err.0.len());
+        assert!(err.0[0].starts_with("Source image width"));
+    }
+
+    #[test]
+    fn test_non_empty_bad_image_validation_2() {
+        let settings = ValidationSettings::default();
+        let image = DynamicImage::new(
+            settings.max_source_image_width,
+            settings.max_source_image_height + 1,
+            image::ColorType::Rgb8,
+        );
+        let r = SimpleValidator.validate_source_image(&settings, &image);
+        let err = r.err().unwrap();
+        assert_eq!(1, err.0.len());
+        assert!(err.0[0].starts_with("Source image height"));
+    }
+
+    #[test]
+    fn test_non_empty_bad_image_validation_3() {
         let settings = ValidationSettings::default();
         let image = DynamicImage::new(
             settings.max_source_image_width + 1,
@@ -154,11 +217,9 @@ mod tests {
             image::ColorType::Rgb8,
         );
         let r = SimpleValidator.validate_source_image(&settings, &image);
-        assert!(r.is_err());
-        if let Err(problems) = r {
-            assert_eq!(2, problems.0.len());
-        } else {
-            panic!("Fail")
-        }
+        let err = r.err().unwrap();
+        assert_eq!(2, err.0.len());
+        assert!(err.0[0].starts_with("Source image width"));
+        assert!(err.0[1].starts_with("Source image height"));
     }
 }
