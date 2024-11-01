@@ -48,7 +48,13 @@ impl OperationsRunner for SingletonOperationsRunner {
         operations.0.iter().fold(image, |mut next, op| {
             next = match op {
                 Operation::Resize { width, height } => {
-                    next.resize(*width, *height, image::imageops::FilterType::Gaussian)
+                    let resize_to_width = if *width == 0 { next.width() } else { *width };
+                    let resize_to_height = if *height == 0 { next.height() } else { *height };
+                    next.resize(
+                        resize_to_width,
+                        resize_to_height,
+                        image::imageops::FilterType::Gaussian,
+                    )
                 }
                 Operation::FlipHorizontally => next.fliph(),
                 Operation::FlipVertically => next.flipv(),
@@ -120,5 +126,25 @@ mod tests {
         let result = SingletonOperationsRunner.run(image, &operations).await;
         assert_eq!(3, result.width());
         assert_eq!(2, result.height());
+    }
+
+    #[tokio::test]
+    async fn test_operations_runner_no_resize() {
+        let image_bin = include_bytes!("not-aliens.jpg");
+        let image_reader = ImageReader::new(Cursor::new(image_bin))
+            .with_guessed_format()
+            .unwrap();
+
+        let image = image_reader.decode().unwrap();
+        let original_image = image.clone();
+
+        let operations = Operations::build(&Some(ImageResize {
+            target_width: 0,
+            target_height: 0,
+        }));
+
+        let result = SingletonOperationsRunner.run(image, &operations).await;
+        assert_eq!(original_image.width(), result.width());
+        assert_eq!(original_image.height(), result.height());
     }
 }
