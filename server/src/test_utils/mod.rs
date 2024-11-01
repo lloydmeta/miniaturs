@@ -1,10 +1,13 @@
 use std::thread;
 
+use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
+use aws_sdk_s3::{self as s3};
 use testcontainers::{runners::AsyncRunner, ContainerAsync, ImageExt};
 use testcontainers_modules::localstack::LocalStack;
+use tokio::sync::OnceCell;
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
-    Mutex, OnceCell,
+    Mutex,
 };
 
 pub type TestResult<T> = Result<T, Box<dyn std::error::Error + 'static>>;
@@ -110,4 +113,30 @@ async fn start_localstack() {
             }
         }
     }
+}
+
+// Holds the shared S3 client that refers to the above; use `s3_client().await` to get it
+static S3_CLIENT: OnceCell<aws_sdk_s3::Client> = OnceCell::const_new();
+pub async fn s3_client() -> &'static aws_sdk_s3::Client {
+    S3_CLIENT
+        .get_or_init(|| async {
+            let node = localstack_node().await;
+            let host_port = node
+                .get_host_port_ipv4(4566)
+                .await
+                .expect("Port from Localstack to be retrievable");
+
+            let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
+            let region = region_provider.region().await.unwrap();
+            let creds = s3::config::Credentials::new("fake", "fake", None, None, "test");
+            let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
+                .region(region.clone())
+                .credentials_provider(creds)
+                .endpoint_url(format!("http://127.0.0.1:{host_port}"))
+                .load()
+                .await;
+
+            s3::Client::new(&config)
+        })
+        .await
 }

@@ -1,11 +1,3 @@
-//! This is an example function that leverages the Lambda Rust runtime HTTP support
-//! and the [axum](https://docs.rs/axum/latest/axum/index.html) web framework.  The
-//! runtime HTTP support is backed by the [tower::Service](https://docs.rs/tower-service/0.3.2/tower_service/trait.Service.html)
-//! trait.  Axum's applications are also backed by the `tower::Service` trait.  That means
-//! that it is fairly easy to build an Axum application and pass the resulting `Service`
-//! implementation to the Lambda runtime to run as a Lambda function.  By using Axum instead
-//! of a basic `tower::Service` you get web framework niceties like routing, request component
-//! extraction, validation, etc.
 use std::any::Any;
 use std::io::Cursor;
 
@@ -15,8 +7,9 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::{Html, IntoResponse, Response};
 use axum::{response::Json, routing::*, Router};
 
+use bytesize::ByteSize;
 use image::{ImageFormat, ImageReader};
-use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE};
+use reqwest::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE};
 use responses::Standard;
 use tower_http::catch_panic::CatchPanicLayer;
 
@@ -30,6 +23,7 @@ use crate::infra::image_caching::{
     ImageResizedCacheRequest,
 };
 use crate::infra::image_manipulation::{Operations, OperationsRunner, SingletonOperationsRunner};
+use crate::infra::validations::{SingletonValidator, Validator};
 
 use miniaturs_shared::signature::{ensure_signature_is_valid_for_path_and_query, SignatureError};
 
@@ -47,9 +41,9 @@ pub fn create_router(app_components: AppComponents) -> Router {
 }
 
 async fn root() -> Json<Standard> {
-    Json(Standard {
-        message: "You probably want to use the resize url...".to_string(),
-    })
+    Json(Standard::message(
+        "You probably want to use the resize url...",
+    ))
 }
 
 async fn resize(
@@ -62,7 +56,9 @@ async fn resize(
         &uri,
         signature,
     )?;
+    let validation_settings = &app_components.config.validation_settings;
     let operations = Operations::build(&Some(resized_image.into()));
+    SingletonValidator.validate_operations(validation_settings, &operations)?;
     let processed_image_request = {
         ImageResizeRequest {
             requested_image_url: image_url.clone(),
@@ -93,35 +89,49 @@ async fn resize(
             .get(&unprocessed_cache_retrieve_req)
             .await?;
 
-        let (response_status_code, bytes, maybe_content_type_string) =
-            if let Some(cached_fetched) = maybe_cached_fetched_image {
-                (
-                    StatusCode::OK,
-                    cached_fetched.bytes,
-                    cached_fetched.requested.content_type,
-                )
-            } else {
-                let mut proxy_response = app_components.http_client.get(&image_url).send().await?;
-                let status_code = proxy_response.status();
-                let headers = proxy_response.headers_mut();
-                let maybe_content_type = headers.remove(CONTENT_TYPE);
+        let (response_status_code, bytes, maybe_content_type_string) = if let Some(cached_fetched) =
+            maybe_cached_fetched_image
+        {
+            (
+                StatusCode::OK,
+                cached_fetched.bytes,
+                cached_fetched.requested.content_type,
+            )
+        } else {
+            let mut proxy_response = app_components.http_client.get(&image_url).send().await?;
+            let status_code = proxy_response.status();
+            let headers = proxy_response.headers_mut();
 
-                let maybe_content_type_string =
-                    maybe_content_type.and_then(|h| h.to_str().map(|s| s.to_string()).ok());
+            let maybe_content_length = headers.remove(CONTENT_LENGTH);
+            let maybe_content_length_bytesize =
+                maybe_content_length.and_then(|h| h.to_str().ok()?.parse().ok());
 
-                let cache_fetched_req = ImageFetchedCacheRequest {
-                    request: unprocessed_cache_retrieve_req,
-                    content_type: maybe_content_type_string.clone(),
-                };
-                let bytes: Vec<_> = proxy_response.bytes().await?.into();
-                app_components
-                    .unprocessed_images_cacher
-                    .set(&bytes, &cache_fetched_req)
-                    .await?;
+            if let Some(content_length_bytesize) = maybe_content_length_bytesize {
+                SingletonValidator
+                    .validate_image_download_size(validation_settings, content_length_bytesize)?;
+            }
 
-                let response_status_code = StatusCode::from_u16(status_code.as_u16())?;
-                (response_status_code, bytes, maybe_content_type_string)
+            let maybe_content_type = headers.remove(CONTENT_TYPE);
+
+            let maybe_content_type_string =
+                maybe_content_type.and_then(|h| h.to_str().map(|s| s.to_string()).ok());
+
+            let cache_fetched_req = ImageFetchedCacheRequest {
+                request: unprocessed_cache_retrieve_req,
+                content_type: maybe_content_type_string.clone(),
             };
+            let bytes: Vec<_> = proxy_response.bytes().await?.into();
+
+            SingletonValidator
+                .validate_image_size(validation_settings, ByteSize::b(bytes.len() as u64))?;
+            app_components
+                .unprocessed_images_cacher
+                .set(&bytes, &cache_fetched_req)
+                .await?;
+
+            let response_status_code = StatusCode::from_u16(status_code.as_u16())?;
+            (response_status_code, bytes, maybe_content_type_string)
+        };
 
         let mut image_reader = ImageReader::new(Cursor::new(bytes));
 
@@ -141,11 +151,11 @@ async fn resize(
             .format()
             .ok_or(AppError::UnableToDetermineFormat)?;
 
+        let original_image = reader_with_format.decode()?;
+        SingletonValidator.validate_source_image(validation_settings, &original_image)?;
+
         let image = SingletonOperationsRunner
-            .run(
-                reader_with_format.decode()?,
-                &processed_image_request.operations,
-            )
+            .run(original_image, &processed_image_request.operations)
             .await;
 
         let mut cursor = Cursor::new(Vec::new());
@@ -189,27 +199,23 @@ async fn metadata(
     )?;
 
     let operations = Operations::build(&Some(resized_image.into()));
-    let metadata = MetadataResponse::build(&image_url, &operations);
     let mut response_headers = HeaderMap::new();
     response_headers.insert(CACHE_CONTROL, CACHE_CONTROL_HEADER_VALUE);
+
+    SingletonValidator
+        .validate_operations(&app_components.config.validation_settings, &operations)?;
+
+    let metadata = MetadataResponse::build(&image_url, &operations);
     Ok((StatusCode::OK, response_headers, Json(metadata)).into_response())
 }
 
-/// Example on how to return status codes and data from an Axum function
 async fn health_check() -> (StatusCode, Json<Standard>) {
     let health = true;
     match health {
-        true => (
-            StatusCode::OK,
-            Json(Standard {
-                message: "Healthy!".to_string(),
-            }),
-        ),
+        true => (StatusCode::OK, Json(Standard::message("Healthy!"))),
         false => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(Standard {
-                message: "Not Healthy!".to_string(),
-            }),
+            Json(Standard::message("Not Healthy!")),
         ),
     }
 }
@@ -222,10 +228,7 @@ async fn handle_404(headers: HeaderMap) -> impl IntoResponse {
         ),
         _ => (
             StatusCode::NOT_FOUND,
-            Json(Standard {
-                message: "Not found.".to_string(),
-            })
-            .into_response(),
+            Json(Standard::message("Not found.")).into_response(),
         ),
     }
 }
@@ -270,21 +273,24 @@ impl IntoResponse for AppError {
         let result = match self {
             Self::CatchAll(anyhow_err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(Standard {
-                    message: anyhow_err.to_string(),
-                }),
+                Json(Standard::message(anyhow_err)),
             ),
             Self::BadSignature(signature) => (
                 StatusCode::UNAUTHORIZED,
-                Json(Standard {
-                    message: format!("The signature you provided [{signature}] was not correct"),
-                }),
+                Json(Standard::message(format!("The signature you provided [{signature}] was not correct"))),
             ),
             Self::UnableToDetermineFormat => (
                 StatusCode::BAD_REQUEST,
-                Json(Standard {
-                    message: "An image format could not be determined. Make sure the extension or the content-type header is sensible.".to_string(),
-                }),
+                Json(Standard::message("An image format could not be determined. Make sure the extension or the content-type header is sensible.")
+            ),
+            ),
+            Self::ValidationFailed(errors) => (
+                StatusCode::BAD_REQUEST,
+                Json(
+                    Standard {
+                        messages: errors
+                    }
+                )
             ),
         };
         result.into_response()
@@ -303,7 +309,7 @@ fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response<Full<Bytes>> {
         "Unknown panic message".to_string()
     };
 
-    let error = Standard { message: details };
+    let error = Standard::message(details);
 
     let body = serde_json::to_string(&error).unwrap_or_else(|e| {
         format!("{{\"message\": \"Could not serialise error message [{e}]\"}}")

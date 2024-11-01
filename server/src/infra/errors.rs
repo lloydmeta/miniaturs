@@ -1,7 +1,10 @@
+use super::validations::ValidationErrors;
+
 #[derive(Debug)]
 pub enum AppError {
     CatchAll(anyhow::Error),
     BadSignature(String),
+    ValidationFailed(Vec<String>),
     UnableToDetermineFormat,
 }
 
@@ -13,5 +16,11 @@ where
 {
     fn from(err: E) -> Self {
         AppError::CatchAll(err.into())
+    }
+}
+
+impl From<ValidationErrors> for AppError {
+    fn from(value: ValidationErrors) -> Self {
+        AppError::ValidationFailed(value.0)
     }
 }

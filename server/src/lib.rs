@@ -8,10 +8,11 @@ pub mod test_utils;
 mod integration_tests {
     use std::io::Cursor;
 
+    use crate::api::responses::Standard;
     use crate::api::routing::handlers::create_router;
     use crate::infra::components::AppComponents;
-    use crate::infra::config::Config;
-    use crate::test_utils::{localstack_node, TestResult};
+    use crate::infra::config::{Config, ValidationSettings};
+    use crate::test_utils::{localstack_node, s3_client, TestResult};
 
     use super::api::responses::MetadataResponse;
     use super::infra::config::{AuthenticationSettings, AwsSettings, ImageCacheSettings};
@@ -29,8 +30,6 @@ mod integration_tests {
     static UNPROCESSED_BUCKET: OnceCell<String> = OnceCell::const_new();
     static PROCESSED_BUCKET: OnceCell<String> = OnceCell::const_new();
     static CONFIG: OnceCell<Config> = OnceCell::const_new();
-    // Used for setting up buckets only...
-    static BOOTSTRAP_S3_CLIENT: OnceCell<aws_sdk_s3::Client> = OnceCell::const_new();
     static AWS_CONFIG: OnceCell<aws_config::SdkConfig> = OnceCell::const_new();
 
     #[tokio::test]
@@ -44,6 +43,8 @@ mod integration_tests {
     }
 
     const PNG_URL_1: &'static str = "https://beachape.com/images/octopress_with_container.png";
+    const PNG_URL_FOR_VALIDATION_FAILURES: &'static str =
+        "https://beachape.com/images/oh-shit-cat.jpg";
     const JPG_URL_1: &'static str = "https://beachape.com/images/super-high-performance.jpg";
 
     #[tokio::test]
@@ -81,6 +82,19 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    async fn test_resize_errors() -> TestResult<()> {
+        test_errors(
+            false,
+            &PNG_URL_FOR_VALIDATION_FAILURES,
+            ImageResize {
+                target_width: 10001,
+                target_height: 10001,
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
     async fn test_metadata_response() -> TestResult<()> {
         test_metadata(
             &PNG_URL_1,
@@ -111,6 +125,19 @@ mod integration_tests {
             ImageResize {
                 target_width: -100,
                 target_height: -80,
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn test_metadata_errors() -> TestResult<()> {
+        test_errors(
+            true,
+            &PNG_URL_FOR_VALIDATION_FAILURES,
+            ImageResize {
+                target_width: 10001,
+                target_height: 10001,
             },
         )
         .await
@@ -264,6 +291,40 @@ mod integration_tests {
         Ok(())
     }
 
+    async fn test_errors(
+        metadata_path: bool,
+        image_url: &str,
+        resize: ImageResize,
+    ) -> TestResult<()> {
+        let config = config().await;
+        let signed_path = if metadata_path {
+            signed_metadata_path(&config.authentication_settings, resize, image_url)?
+        } else {
+            signed_resize_path(&config.authentication_settings, resize, image_url)?
+        };
+
+        let response = app()
+            .await?
+            .oneshot(Request::builder().uri(signed_path).body(Body::empty())?)
+            .await?;
+        assert_eq!(StatusCode::BAD_REQUEST, response.status());
+
+        let body_as_metadata: Standard =
+            serde_json::from_slice(response.into_body().collect().await?.to_bytes().as_ref())?;
+
+        if resize.target_height as u32 > config.validation_settings.max_resize_target_height
+            && resize.target_width as u32 > config.validation_settings.max_resize_target_width
+        {
+            assert_eq!(2, body_as_metadata.messages.len())
+        } else {
+            assert_eq!(1, body_as_metadata.messages.len())
+        }
+
+        let unprocessed_cached = retrieve_unprocessed_cached(image_url).await;
+        assert!(unprocessed_cached.is_none());
+        Ok(())
+    }
+
     async fn retrieve_unprocessed_cached(
         image_url: &str,
     ) -> Option<Retrieved<ImageFetchedCacheRequest>> {
@@ -349,6 +410,7 @@ mod integration_tests {
                     authentication_settings,
                     image_cache_settings,
                     aws_settings,
+                    validation_settings: ValidationSettings::default(),
                 }
             })
             .await
@@ -386,12 +448,7 @@ mod integration_tests {
     }
 
     async fn bootstrap_s3_client() -> &'static aws_sdk_s3::Client {
-        BOOTSTRAP_S3_CLIENT
-            .get_or_init(|| async {
-                let config = aws_config().await;
-                aws_sdk_s3::Client::new(&config)
-            })
-            .await
+        s3_client().await
     }
 
     async fn aws_config() -> &'static aws_config::SdkConfig {

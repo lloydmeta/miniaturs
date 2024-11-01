@@ -2,9 +2,17 @@ use serde::*;
 
 use crate::infra::image_manipulation;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Standard {
-    pub message: String,
+    pub messages: Vec<String>,
+}
+
+impl Standard {
+    pub fn message<S: ToString>(s: S) -> Self {
+        Standard {
+            messages: vec![s.to_string()],
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
