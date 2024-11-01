@@ -20,6 +20,7 @@ Tiny HTTP image resizer.
 To fulfil the above:
 
 * Runs in a Lambda
+  * Running on ARM, [because it's cheaper](https://blog.awsfundamentals.com/aws-lambda-pricing-a-complete-guide-to-understanding-the-cost-of-the-serverless-service#heading-architectures-arm-vs-x86-arm-is-cheaper): "about 34% cheaper compared to the default x86 processors"
 * Rust ⚡️
 * Caching in layers: CDN to protect the app, with S3 for storing images
 * Serverless, but built on HTTP framework ([cargo-lambda](https://www.cargo-lambda.info) on top of [axum](https://github.com/tokio-rs/axum))
