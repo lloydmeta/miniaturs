@@ -94,6 +94,7 @@ flowchart
       rawCache[("Unprocessed cache")]
       processedCache[("Processed cache")]
 
+      lambdaRequest[\"Request"\]
       lambdaResponse[\"Ok/Error Response"\]
 
       opsResultCached{"Operations Result Cached?"}
@@ -111,7 +112,8 @@ flowchart
       processImage["Process image according to operations"]
       cacheResult["Cache processed result"]
 
-      cdnCached -->|no| sigCheck
+      cdnCached -->|no| lambdaRequest
+      lambdaRequest --> sigCheck
       sigCheck -->|no| lambdaResponse
       
 
