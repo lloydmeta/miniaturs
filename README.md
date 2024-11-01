@@ -52,29 +52,106 @@ miniaturs relies on environment variables for configuration. These include
 
 ## Flow
 
-1. Layer 1 validations (is the request well-formed?)
-2. Ensure trusted request (e.g., check hash)
-3. Layer 2 validations (no I/O):
-    1. Are the image processing options supported?
-       1. Resize-to target size check (e.g., is it too big?)
-4. Determine if we can return a cached result:
-    1. Is there a cached result in the storage bucket?
-        1. If yes, return it as the result
-        2. Else continue
-5. Image retrieval:
-    1. Is the remote image already cached in our source bucket?
-        1. If yes, retrieve it
-        2. If not, check alleged image size (content-length header based) before receiving bytes
-        3. If the alleged image size does not exceed the configured max, retrieve it
-            1. Else return an error
-    2. Is the _actual_ (downloaded) image too big?
-        1. If yes, return an error
-6. Image processing:
-    1. Is the image in a supported format for our processor?
-        1. If yes, process it
-        2. Else return an error
-7. Cache the resulting image in our bucket
-8. Return the resulting image
+```mermaid
+flowchart
+   imageReq(("Image request"))
+
+
+   respEnd((Ok/Error response))
+
+   imageReq --> cdnReq
+   cdnResp --> respEnd
+
+   subgraph CDN/WAF
+      cdnReq[\"Request"\]
+      cdnResp[\"Response"\]
+      cdnCache[("CDN Cache")]
+      wafBlocked{"Rate limited?"}
+      cdnCached{"Cached?"}
+      cache["Cache"]
+
+      cdnReq --> wafBlocked
+      wafBlocked -->|yes| cdnResp
+
+      wafBlocked -->|no| cdnCached
+
+      cdnCached <-->|fetch| cdnCache
+      cdnCached -->|yes| cdnResp
+
+      
+      cache -->|insert| cdnCache
+      cache --> cdnResp
+
+
+   end
+
+   subgraph Lambda
+
+      sigCheck{"Signature OK"?}
+      toOps[To Operations]
+      opsCheck{"Operations OK?"}
+
+      rawCache[("Unprocessed cache")]
+      processedCache[("Processed cache")]
+
+      lambdaRequest[\"Request"\]
+      lambdaResponse[\"Ok/Error Response"\]
+
+      opsResultCached{"Operations Result Cached?"}
+      
+      fetchCachedResult["Fetch cached result"]
+
+      rawCached{"Unprocessed image Cached?"}
+      fetchCachedRaw["Fetch cached unprocessed image"]
+
+      fetchRaw["Fetch unprocessed image from remote"]
+
+      rawImageValidation{"Unprocessed image validations pass?"}
+
+      cacheRaw["Cache unprocessed image"]
+      processImage["Process image according to operations"]
+      cacheResult["Cache processed result"]
+
+      cdnCached -->|no| lambdaRequest
+      lambdaRequest --> sigCheck
+      sigCheck -->|no| lambdaResponse
+      
+
+      sigCheck -->|yes| toOps
+
+      toOps --> opsCheck
+      opsCheck -->|no| lambdaResponse
+      opsCheck -->|yes| fetchCachedResult 
+      fetchCachedResult <-->|fetch| processedCache
+      fetchCachedResult --> opsResultCached
+
+
+      opsResultCached -->|yes| lambdaResponse
+      opsResultCached -->|no| fetchCachedRaw 
+
+      fetchCachedRaw <-->|fetch| rawCache
+
+      fetchCachedRaw --> rawCached
+
+      rawCached -->|no| fetchRaw
+      fetchRaw --> rawImageValidation
+      rawImageValidation -->|no| lambdaResponse
+      rawImageValidation -->|yes| cacheRaw
+      cacheRaw -->|cache| rawCache
+
+      cacheRaw --> processImage
+      rawCached -->|yes| processImage
+
+      processImage --> cacheResult
+      cacheResult -->|cache| processedCache
+
+      cacheResult --> lambdaResponse     
+      
+
+      lambdaResponse --> cache
+   end
+
+```
 
 ## Development
 
@@ -138,6 +215,3 @@ Use `Makefile` targets.
   * https://zenn.dev/devneko/articles/0a6fb5c9ea5689
   * https://crates.io/crates/image
 * [Logs, tracing](https://github.com/tokio-rs/tracing?tab=readme-ov-file#in-applications)
-* Improve image resizing:
-  * Encapsulate and test
-  * Do in another thread?
