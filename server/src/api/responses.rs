@@ -2,7 +2,7 @@ use serde::*;
 
 use crate::infra::image_manipulation;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Standard {
     pub messages: Vec<String>,
 }
