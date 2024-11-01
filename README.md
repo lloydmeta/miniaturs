@@ -68,7 +68,7 @@ flowchart
 
    subgraph CDN/WAF
       cdnReq[\"Request"\]
-      cdnResp[\"Response"\]
+      cdnResp[\"Ok/Error Response"\]
       cdnCache[("CDN Cache")]
       wafBlocked{"Rate limited?"}
       cdnCached{"Cached?"}
@@ -83,7 +83,7 @@ flowchart
       cdnCached -->|yes| cdnResp
 
       
-      cache -->|insert| cdnCache
+      cache -->|cache| cdnCache
       cache --> cdnResp
 
 
