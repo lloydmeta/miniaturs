@@ -10,7 +10,7 @@ mod integration_tests {
 
     use crate::api::routing::handlers::create_router;
     use crate::infra::components::AppComponents;
-    use crate::infra::config::Config;
+    use crate::infra::config::{Config, ValidationSettings};
     use crate::test_utils::{localstack_node, s3_client, TestResult};
 
     use super::api::responses::MetadataResponse;
@@ -347,6 +347,7 @@ mod integration_tests {
                     authentication_settings,
                     image_cache_settings,
                     aws_settings,
+                    validation_settings: ValidationSettings::default(),
                 }
             })
             .await

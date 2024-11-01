@@ -7,6 +7,11 @@ pub struct Standard {
     pub message: String,
 }
 
+#[derive(Serialize)]
+pub struct FailedValidations {
+    pub errors: Vec<String>,
+}
+
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct MetadataResponse {
     pub source: Source,

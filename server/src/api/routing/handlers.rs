@@ -21,7 +21,7 @@ use responses::Standard;
 use tower_http::catch_panic::CatchPanicLayer;
 
 use crate::api::requests::{ImageResizePathParam, Signature};
-use crate::api::responses::{self, MetadataResponse};
+use crate::api::responses::{self, FailedValidations, MetadataResponse};
 use crate::infra::components::AppComponents;
 use crate::infra::config::AuthenticationSettings;
 use crate::infra::errors::AppError;
@@ -30,6 +30,7 @@ use crate::infra::image_caching::{
     ImageResizedCacheRequest,
 };
 use crate::infra::image_manipulation::{Operations, OperationsRunner, SingletonOperationsRunner};
+use crate::infra::validations::{SimpleValidator, Validator};
 
 use miniaturs_shared::signature::{ensure_signature_is_valid_for_path_and_query, SignatureError};
 
@@ -63,6 +64,7 @@ async fn resize(
         signature,
     )?;
     let operations = Operations::build(&Some(resized_image.into()));
+    SimpleValidator.validate_operations(&app_components.config.validation_settings, &operations)?;
     let processed_image_request = {
         ImageResizeRequest {
             requested_image_url: image_url.clone(),
@@ -141,11 +143,12 @@ async fn resize(
             .format()
             .ok_or(AppError::UnableToDetermineFormat)?;
 
+        let original_image = reader_with_format.decode()?;
+        SimpleValidator
+            .validate_source_image(&app_components.config.validation_settings, &original_image)?;
+
         let image = SingletonOperationsRunner
-            .run(
-                reader_with_format.decode()?,
-                &processed_image_request.operations,
-            )
+            .run(original_image, &processed_image_request.operations)
             .await;
 
         let mut cursor = Cursor::new(Vec::new());
@@ -189,9 +192,12 @@ async fn metadata(
     )?;
 
     let operations = Operations::build(&Some(resized_image.into()));
-    let metadata = MetadataResponse::build(&image_url, &operations);
     let mut response_headers = HeaderMap::new();
     response_headers.insert(CACHE_CONTROL, CACHE_CONTROL_HEADER_VALUE);
+
+    SimpleValidator.validate_operations(&app_components.config.validation_settings, &operations)?;
+
+    let metadata = MetadataResponse::build(&image_url, &operations);
     Ok((StatusCode::OK, response_headers, Json(metadata)).into_response())
 }
 
@@ -267,27 +273,34 @@ fn ensure_signature_is_valid(
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        let result = match self {
+        match self {
             Self::CatchAll(anyhow_err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(Standard {
                     message: anyhow_err.to_string(),
                 }),
-            ),
+            ).into_response(),
             Self::BadSignature(signature) => (
                 StatusCode::UNAUTHORIZED,
                 Json(Standard {
                     message: format!("The signature you provided [{signature}] was not correct"),
                 }),
-            ),
+            ).into_response(),
             Self::UnableToDetermineFormat => (
                 StatusCode::BAD_REQUEST,
                 Json(Standard {
                     message: "An image format could not be determined. Make sure the extension or the content-type header is sensible.".to_string(),
                 }),
-            ),
-        };
-        result.into_response()
+            ).into_response(),
+            Self::ValidationFailed(errors) => (
+                StatusCode::BAD_REQUEST,
+                Json(
+                    FailedValidations {
+                        errors
+                    }
+                )
+            ).into_response(),
+        }
     }
 }
 
