@@ -4,12 +4,15 @@ use crate::infra::image_manipulation;
 
 #[derive(Serialize)]
 pub struct Standard {
-    pub message: String,
+    pub messages: Vec<String>,
 }
 
-#[derive(Serialize)]
-pub struct FailedValidations {
-    pub errors: Vec<String>,
+impl Standard {
+    pub fn message<S: ToString>(s: S) -> Self {
+        Standard {
+            messages: vec![s.to_string()],
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]

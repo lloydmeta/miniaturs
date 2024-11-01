@@ -1,11 +1,3 @@
-//! This is an example function that leverages the Lambda Rust runtime HTTP support
-//! and the [axum](https://docs.rs/axum/latest/axum/index.html) web framework.  The
-//! runtime HTTP support is backed by the [tower::Service](https://docs.rs/tower-service/0.3.2/tower_service/trait.Service.html)
-//! trait.  Axum's applications are also backed by the `tower::Service` trait.  That means
-//! that it is fairly easy to build an Axum application and pass the resulting `Service`
-//! implementation to the Lambda runtime to run as a Lambda function.  By using Axum instead
-//! of a basic `tower::Service` you get web framework niceties like routing, request component
-//! extraction, validation, etc.
 use std::any::Any;
 use std::io::Cursor;
 
@@ -21,7 +13,7 @@ use responses::Standard;
 use tower_http::catch_panic::CatchPanicLayer;
 
 use crate::api::requests::{ImageResizePathParam, Signature};
-use crate::api::responses::{self, FailedValidations, MetadataResponse};
+use crate::api::responses::{self, MetadataResponse};
 use crate::infra::components::AppComponents;
 use crate::infra::config::AuthenticationSettings;
 use crate::infra::errors::AppError;
@@ -48,9 +40,9 @@ pub fn create_router(app_components: AppComponents) -> Router {
 }
 
 async fn root() -> Json<Standard> {
-    Json(Standard {
-        message: "You probably want to use the resize url...".to_string(),
-    })
+    Json(Standard::message(
+        "You probably want to use the resize url...",
+    ))
 }
 
 async fn resize(
@@ -201,21 +193,13 @@ async fn metadata(
     Ok((StatusCode::OK, response_headers, Json(metadata)).into_response())
 }
 
-/// Example on how to return status codes and data from an Axum function
 async fn health_check() -> (StatusCode, Json<Standard>) {
     let health = true;
     match health {
-        true => (
-            StatusCode::OK,
-            Json(Standard {
-                message: "Healthy!".to_string(),
-            }),
-        ),
+        true => (StatusCode::OK, Json(Standard::message("Healthy!"))),
         false => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(Standard {
-                message: "Not Healthy!".to_string(),
-            }),
+            Json(Standard::message("Not Healthy!")),
         ),
     }
 }
@@ -228,10 +212,7 @@ async fn handle_404(headers: HeaderMap) -> impl IntoResponse {
         ),
         _ => (
             StatusCode::NOT_FOUND,
-            Json(Standard {
-                message: "Not found.".to_string(),
-            })
-            .into_response(),
+            Json(Standard::message("Not found.")).into_response(),
         ),
     }
 }
@@ -273,34 +254,30 @@ fn ensure_signature_is_valid(
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        match self {
+        let result = match self {
             Self::CatchAll(anyhow_err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(Standard {
-                    message: anyhow_err.to_string(),
-                }),
-            ).into_response(),
+                Json(Standard::message(anyhow_err)),
+            ),
             Self::BadSignature(signature) => (
                 StatusCode::UNAUTHORIZED,
-                Json(Standard {
-                    message: format!("The signature you provided [{signature}] was not correct"),
-                }),
-            ).into_response(),
+                Json(Standard::message(format!("The signature you provided [{signature}] was not correct"))),
+            ),
             Self::UnableToDetermineFormat => (
                 StatusCode::BAD_REQUEST,
-                Json(Standard {
-                    message: "An image format could not be determined. Make sure the extension or the content-type header is sensible.".to_string(),
-                }),
-            ).into_response(),
+                Json(Standard::message("An image format could not be determined. Make sure the extension or the content-type header is sensible.")
+            ),
+            ),
             Self::ValidationFailed(errors) => (
                 StatusCode::BAD_REQUEST,
                 Json(
-                    FailedValidations {
-                        errors
+                    Standard {
+                        messages: errors
                     }
                 )
-            ).into_response(),
-        }
+            ),
+        };
+        result.into_response()
     }
 }
 
@@ -316,7 +293,7 @@ fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response<Full<Bytes>> {
         "Unknown panic message".to_string()
     };
 
-    let error = Standard { message: details };
+    let error = Standard::message(details);
 
     let body = serde_json::to_string(&error).unwrap_or_else(|e| {
         format!("{{\"message\": \"Could not serialise error message [{e}]\"}}")

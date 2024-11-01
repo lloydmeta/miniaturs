@@ -1,12 +1,3 @@
-//! This is an example function that leverages the Lambda Rust runtime HTTP support
-//! and the [axum](https://docs.rs/axum/latest/axum/index.html) web framework.  The
-//! runtime HTTP support is backed by the [tower::Service](https://docs.rs/tower-service/0.3.2/tower_service/trait.Service.html)
-//! trait.  Axum's applications are also backed by the `tower::Service` trait.  That means
-//! that it is fairly easy to build an Axum application and pass the resulting `Service`
-//! implementation to the Lambda runtime to run as a Lambda function.  By using Axum instead
-//! of a basic `tower::Service` you get web framework niceties like routing, request component
-//! extraction, validation, etc.
-
 use lambda_http::{run, tracing, Error};
 use miniaturs_server::{
     api::routing::handlers::create_router,
