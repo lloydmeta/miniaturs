@@ -44,8 +44,10 @@ miniaturs relies on environment variables for configuration. These include
 * `REQUIRE_PATH_STYLE_S3`     : optional, whether to use "path style" S3 addressing (for local testing), defaults to false.
 * `MAX_RESIZE_TARGET_WIDTH`   : optional, max resize-to image width, defaults to 10,000 (pixels)
 * `MAX_RESIZE_TARGET_HEIGHT`  : optional, max resize-to image height, defaults to 10,000 (pixels)
-* `MAX_SOURCE_IMAGE_WIDTH`   : optional, max source image width, defaults to 10,000 (pixels)
-* `MAX_SOURCE_IMAGE_HEIGHT`  : optional, max source image height, defaults to 10,000 (pixels)
+* `MAX_SOURCE_IMAGE_WIDTH`    : optional, max source image width, defaults to 10,000 (pixels)
+* `MAX_SOURCE_IMAGE_HEIGHT`   : optional, max source image height, defaults to 10,000 (pixels)
+* `MAX_IMAGE_DOWNLOAD_SIZE`   : optional, max source image download size (as reported by content-length header), defaults to 10mb (must be parseable by [bytesize](https://crates.io/crates/bytesize))
+* `MAX_IMAGE_FILE_SIZE`       : optional, max source (post-download) image size, defaults to 10mb (must be parseable by [bytesize](https://crates.io/crates/bytesize))
 
 ## Flow
 
@@ -54,8 +56,6 @@ miniaturs relies on environment variables for configuration. These include
 3. Layer 2 validations (no I/O):
     1. Are the image processing options supported?
        1. Resize-to target size check (e.g., is it too big?)
-    2. Is the remote image path pointing to a supported source? PENDING
-    3. Is the remote image extension supported?
 4. Determine if we can return a cached result:
     1. Is there a cached result in the storage bucket?
         1. If yes, return it as the result
@@ -63,10 +63,10 @@ miniaturs relies on environment variables for configuration. These include
 5. Image retrieval:
     1. Is the remote image already cached in our source bucket?
         1. If yes, retrieve it
-        2. If not, issue a HEAD request to get image size PENDING
-        3. If the image size does not exceed the configured max, retrieve it
+        2. If not, check alleged image size (content-length header based) before receiving bytes
+        3. If the alleged image size does not exceed the configured max, retrieve it
             1. Else return an error
-    2. Is the actual downloaded image too big? PENDING
+    2. Is the _actual_ (downloaded) image too big?
         1. If yes, return an error
 6. Image processing:
     1. Is the image in a supported format for our processor?
