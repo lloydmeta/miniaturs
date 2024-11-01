@@ -14,7 +14,7 @@ Tiny HTTP image resizer.
   * Being fast can help minimise costs
 * Scalable: can handle lots of requests
 * Thumbor-ish
-* A good net citizen (don’t make requests to third parties if we have it in cache)
+* Fetch from remote urls, but be good net citizen (don’t make requests to third parties if we have it in cache)
 * Debuggable
 
 To fulfil the above:
@@ -32,7 +32,9 @@ An example Terraform config in `terraform/prod` is provided to show how to deplo
 We only support resizing at the moment
 
 1. An "image" endpoint [a la Thumbor](https://thumbor.readthedocs.io/en/latest/usage.html#image-endpoint)
+    * `GET /{HMAC_signature}/-Wx-H/{image_url}`
 2. A "metadata" endpoint [a la Thumbor](https://thumbor.readthedocs.io/en/latest/usage.html#metadata-endpoint)
+    * `GET /{HMAC_signature}/meta/-Wx-H/{image_url}`
     * Difference: target image size is _not_ returned (might change in the future)
 
 ### Confguration
@@ -52,6 +54,8 @@ miniaturs relies on environment variables for configuration. These include
 
 ## Flow
 
+Flow for an image resize request. The CDN/WAF graph is included since it's an important part of keeping costs low (and included in the prod terraform example), but is not a _must_.
+
 ```mermaid
 flowchart
    imageReq(("Image request"))
@@ -64,7 +68,7 @@ flowchart
 
    subgraph CDN/WAF
       cdnReq[\"Request"\]
-      cdnResp[\"Response"\]
+      cdnResp[\"Ok/Error Response"\]
       cdnCache[("CDN Cache")]
       wafBlocked{"Rate limited?"}
       cdnCached{"Cached?"}
@@ -79,7 +83,7 @@ flowchart
       cdnCached -->|yes| cdnResp
 
       
-      cache -->|insert| cdnCache
+      cache -->|cache| cdnCache
       cache --> cdnResp
 
 
@@ -87,36 +91,32 @@ flowchart
 
    subgraph Lambda
 
+      lambdaRequest[\"Request"\]
       sigCheck{"Signature OK"?}
       toOps[To Operations]
       opsCheck{"Operations OK?"}
 
-      rawCache[("Unprocessed cache")]
       processedCache[("Processed cache")]
-
-      lambdaRequest[\"Request"\]
-      lambdaResponse[\"Ok/Error Response"\]
-
+      fetchCachedResult["Fetch cached result"]
       opsResultCached{"Operations Result Cached?"}
       
-      fetchCachedResult["Fetch cached result"]
-
-      rawCached{"Unprocessed image Cached?"}
+    
+      rawCache[("Unprocessed cache")]
       fetchCachedRaw["Fetch cached unprocessed image"]
+      rawCached{"Unprocessed image Cached?"}
 
       fetchRaw["Fetch unprocessed image from remote"]
-
       rawImageValidation{"Unprocessed image validations pass?"}
-
       cacheRaw["Cache unprocessed image"]
-      processImage["Process image according to operations"]
-      cacheResult["Cache processed result"]
 
+      processImage["Process image according to operations"]
+      cacheResult["Cache processed result"]      
+      lambdaResponse[\"Ok/Error Response"\]
+
+      
       cdnCached -->|no| lambdaRequest
       lambdaRequest --> sigCheck
       sigCheck -->|no| lambdaResponse
-      
-
       sigCheck -->|yes| toOps
 
       toOps --> opsCheck
@@ -124,15 +124,11 @@ flowchart
       opsCheck -->|yes| fetchCachedResult 
       fetchCachedResult <-->|fetch| processedCache
       fetchCachedResult --> opsResultCached
-
-
       opsResultCached -->|yes| lambdaResponse
+
       opsResultCached -->|no| fetchCachedRaw 
-
       fetchCachedRaw <-->|fetch| rawCache
-
       fetchCachedRaw --> rawCached
-
       rawCached -->|no| fetchRaw
       fetchRaw --> rawImageValidation
       rawImageValidation -->|no| lambdaResponse
@@ -145,9 +141,7 @@ flowchart
       processImage --> cacheResult
       cacheResult -->|cache| processedCache
 
-      cacheResult --> lambdaResponse     
-      
-
+      cacheResult --> lambdaResponse
       lambdaResponse --> cache
    end
 
@@ -208,10 +202,6 @@ Use `Makefile` targets.
     * `make provision_prod` to apply changes
     * `TO_SIGN="200x-100/https://beachape.com/images/octopress_with_container.png" make signature_for_prod` to get a signed path
 
-## To Explore
+## To explore
 
-* Image resizing 
-  * https://imgproxy.net/blog/almost-free-image-processing-with-imgproxy-and-aws-lambda/
-  * https://zenn.dev/devneko/articles/0a6fb5c9ea5689
-  * https://crates.io/crates/image
 * [Logs, tracing](https://github.com/tokio-rs/tracing?tab=readme-ov-file#in-applications)
