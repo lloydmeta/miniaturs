@@ -1,4 +1,7 @@
-use std::env;
+use std::{
+    env::{self, VarError},
+    str::FromStr,
+};
 
 use anyhow::Context;
 use aws_config::{BehaviorVersion, SdkConfig};
@@ -91,28 +94,16 @@ impl Config {
 
         let mut validation_settings = ValidationSettings::default();
 
-        if let Some(max_resize_target_width) = env::var(MAX_RESIZE_TARGET_WIDTH)
-            .ok()
-            .and_then(|s| s.parse().ok())
-        {
+        if let Some(max_resize_target_width) = read_env_var(MAX_RESIZE_TARGET_WIDTH)? {
             validation_settings.max_resize_target_width = max_resize_target_width;
         }
-        if let Some(max_resize_target_height) = env::var(MAX_RESIZE_TARGET_HEIGHT)
-            .ok()
-            .and_then(|s| s.parse().ok())
-        {
+        if let Some(max_resize_target_height) = read_env_var(MAX_RESIZE_TARGET_HEIGHT)? {
             validation_settings.max_resize_target_height = max_resize_target_height;
         }
-        if let Some(max_source_image_width) = env::var(MAX_SOURCE_TARGET_WIDTH)
-            .ok()
-            .and_then(|s| s.parse().ok())
-        {
+        if let Some(max_source_image_width) = read_env_var(MAX_SOURCE_TARGET_WIDTH)? {
             validation_settings.max_source_image_width = max_source_image_width;
         }
-        if let Some(max_source_image_height) = env::var(MAX_SOURCE_TARGET_HEIGHT)
-            .ok()
-            .and_then(|s| s.parse().ok())
-        {
+        if let Some(max_source_image_height) = read_env_var(MAX_SOURCE_TARGET_HEIGHT)? {
             validation_settings.max_source_image_height = max_source_image_height;
         }
 
@@ -122,5 +113,21 @@ impl Config {
             aws_settings,
             validation_settings,
         })
+    }
+}
+
+fn read_env_var<T>(env_var_key: &str) -> anyhow::Result<Option<T>>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::error::Error,
+{
+    match env::var(env_var_key) {
+        Err(VarError::NotPresent) => Ok(None),
+        Err(VarError::NotUnicode(s)) => Err(anyhow::anyhow!(
+            "Could not decode env var {env_var_key} [{s:?}]"
+        )),
+        Ok(s) => Ok(Some(s.parse().map_err(|e| {
+            anyhow::anyhow!("Could not convert {env_var_key}: [{e}]")
+        })?)),
     }
 }
