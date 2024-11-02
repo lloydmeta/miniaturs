@@ -45,21 +45,18 @@ pub struct SingletonOperationsRunner;
 
 impl OperationsRunner for SingletonOperationsRunner {
     async fn run(&self, image: DynamicImage, operations: &Operations) -> DynamicImage {
-        operations.0.iter().fold(image, |mut next, op| {
-            next = match op {
-                Operation::Resize { width, height } => {
-                    let resize_to_width = if *width == 0 { next.width() } else { *width };
-                    let resize_to_height = if *height == 0 { next.height() } else { *height };
-                    next.resize(
-                        resize_to_width,
-                        resize_to_height,
-                        image::imageops::FilterType::Gaussian,
-                    )
-                }
-                Operation::FlipHorizontally => next.fliph(),
-                Operation::FlipVertically => next.flipv(),
-            };
-            next
+        operations.0.iter().fold(image, |next, op| match op {
+            Operation::Resize { width, height } => {
+                let resize_to_width = if *width == 0 { next.width() } else { *width };
+                let resize_to_height = if *height == 0 { next.height() } else { *height };
+                next.resize(
+                    resize_to_width,
+                    resize_to_height,
+                    image::imageops::FilterType::Lanczos3,
+                )
+            }
+            Operation::FlipHorizontally => next.fliph(),
+            Operation::FlipVertically => next.flipv(),
         })
     }
 }
