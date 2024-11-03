@@ -71,8 +71,7 @@ async fn resize(
         .await?;
 
     if let Some(cached_resized_image) = maybe_cached_resized_image {
-        let mut response_headers = HeaderMap::new();
-        // TODO see if we can read the type from the cached
+        let mut response_headers = standard_headers();
         if let Ok(content_type_header) =
             HeaderValue::from_str(&cached_resized_image.requested.content_type)
         {
@@ -173,15 +172,10 @@ async fn resize(
             .set(&written_bytes, &cache_image_req)
             .await?;
 
-        let mut response_headers = HeaderMap::new();
-        let maybe_content_type_header = maybe_content_type_string
-            .as_ref()
-            .and_then(|s| HeaderValue::from_str(s).ok());
-
-        if let Some(content_type_header) = maybe_content_type_header {
+        let mut response_headers = standard_headers();
+        if let Ok(content_type_header) = HeaderValue::from_str(&cache_image_req.content_type) {
             response_headers.insert(CONTENT_TYPE, content_type_header);
         }
-        response_headers.insert(CACHE_CONTROL, CACHE_CONTROL_HEADER_VALUE);
 
         Ok((response_status_code, response_headers, written_bytes).into_response())
     }
@@ -312,14 +306,20 @@ fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response<Full<Bytes>> {
     let error = Standard::message(details);
 
     let body = serde_json::to_string(&error).unwrap_or_else(|e| {
-        format!("{{\"message\": \"Could not serialise error message [{e}]\"}}")
+        format!("{{ \"messages\": [\"Could not serialise error message [{e}]\"] }}")
     });
 
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .header(CONTENT_TYPE, "application/json")
         .body(Full::from(body))
-        .unwrap()
+        .expect("Panic handler response building failed.")
+}
+
+fn standard_headers() -> HeaderMap {
+    let mut response_headers = HeaderMap::new();
+    response_headers.insert(CACHE_CONTROL, CACHE_CONTROL_HEADER_VALUE);
+    response_headers
 }
 
 #[cfg(test)]
