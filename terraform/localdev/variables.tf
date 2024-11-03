@@ -15,3 +15,9 @@ variable "image_cache_processed_bucket_name" {
   default     = "processed-images"
   type        = string
 }
+
+variable "memory_size_mb" {
+  description = "Memory to allocate for lambda ($$)"
+  default     = 256
+  type        = number
+}

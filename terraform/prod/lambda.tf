@@ -6,6 +6,8 @@ module "api_lambda" {
   rust_src_path         = "../../server"
   cargo_lambda_env_name = "miniaturs_server"
 
+  memory_size_mb = var.memory_size_mb
+
   environment_variables = {
     RUST_BACKTRACE            = 1
     MINIATURS_SHARED_SECRET   = random_password.miniaturs_shared_secret.result

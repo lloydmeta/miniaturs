@@ -1,14 +1,16 @@
 use anyhow::Error;
 use reqwest::Client;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_tracing::TracingMiddleware;
 
 use super::{
     config::{AwsSettings, Config},
     image_caching::S3ImageCacher,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AppComponents {
-    pub http_client: reqwest::Client,
+    pub http_client: ClientWithMiddleware,
     pub config: Config,
     pub processed_images_cacher: S3ImageCacher,
     pub unprocessed_images_cacher: S3ImageCacher,
@@ -26,9 +28,11 @@ impl AppComponents {
             &config.image_cache_settings.unprocessed_images_bucket_name,
         );
 
-        let client = Client::new();
+        let http_client = ClientBuilder::new(Client::new())
+            .with(TracingMiddleware::default())
+            .build();
         Ok(AppComponents {
-            http_client: client,
+            http_client,
             config,
             processed_images_cacher,
             unprocessed_images_cacher,

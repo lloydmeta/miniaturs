@@ -9,6 +9,7 @@ use aws_sdk_s3::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json;
 use sha256;
+use tracing::instrument;
 
 use crate::api::requests::ImageResizePathParam;
 
@@ -81,7 +82,7 @@ pub trait CacheSettable: CacheGettable {
     fn metadata(&self) -> anyhow::Result<Metadata>;
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct S3ImageCacher {
     client: aws_sdk_s3::Client,
     bucket_name: String,
@@ -98,9 +99,10 @@ impl S3ImageCacher {
 
 impl<GetReq, SetReq> ImageCacher<GetReq, SetReq> for S3ImageCacher
 where
-    GetReq: CacheGettable<Cached = SetReq>,
-    SetReq: CacheSettable<Retrieve = GetReq> + DeserializeOwned,
+    GetReq: CacheGettable<Cached = SetReq> + std::fmt::Debug,
+    SetReq: CacheSettable<Retrieve = GetReq> + DeserializeOwned + std::fmt::Debug,
 {
+    #[instrument]
     async fn get(&self, req: &GetReq) -> anyhow::Result<Option<Retrieved<SetReq>>> {
         let cache_key = req.cache_key()?;
 
@@ -147,6 +149,7 @@ where
         }
     }
 
+    #[instrument(skip(bytes))]
     async fn set(&self, bytes: &[u8], req: &SetReq) -> anyhow::Result<()> {
         let body_stream = ByteStream::new(SdkBody::from(bytes));
 

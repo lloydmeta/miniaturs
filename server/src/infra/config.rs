@@ -6,6 +6,7 @@ use std::{
 use anyhow::Context;
 use aws_config::{BehaviorVersion, SdkConfig};
 use bytesize::ByteSize;
+use tracing::instrument;
 
 const SHARED_SECRET_ENV_KEY: &str = "MINIATURS_SHARED_SECRET";
 const PROCESSED_IMAGES_BUCKET_NAME_ENV_KEY: &str = "PROCESSED_IMAGES_BUCKET";
@@ -18,7 +19,7 @@ const MAX_SOURCE_IMAGE_HEIGHT: &str = "MAX_SOURCE_IMAGE_HEIGHT";
 const MAX_IMAGE_DOWNLOAD_SIZE_KEY: &str = "MAX_IMAGE_DOWNLOAD_SIZE";
 const MAX_IMAGE_FILE_SIZE_KEY: &str = "MAX_IMAGE_FILE_SIZE";
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub authentication_settings: AuthenticationSettings,
     pub image_cache_settings: ImageCacheSettings,
@@ -26,24 +27,24 @@ pub struct Config {
     pub validation_settings: ValidationSettings,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AuthenticationSettings {
     pub shared_secret: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ImageCacheSettings {
     pub processed_images_bucket_name: String,
     pub unprocessed_images_bucket_name: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AwsSettings {
     pub aws_config: SdkConfig,
     pub path_style_s3: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ValidationSettings {
     // Max width that we will resize to (pixels)
     pub max_resize_target_width: u32,
@@ -77,6 +78,7 @@ impl Default for ValidationSettings {
 }
 
 impl Config {
+    #[instrument]
     pub async fn load_env() -> anyhow::Result<Config> {
         let shared_secret = env::var(SHARED_SECRET_ENV_KEY)
             .context("Expected {SHARED_SECRET_ENV_KEY} to be defined")?;

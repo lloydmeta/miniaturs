@@ -2,7 +2,7 @@ use std::{fmt, str::FromStr};
 
 use serde::{de, Deserialize, Deserializer};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub(crate) struct Signature(pub(crate) String);
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]

@@ -201,7 +201,3 @@ Use `Makefile` targets.
     * `make plan_prod` to see changes
     * `make provision_prod` to apply changes
     * `TO_SIGN="200x-100/https://beachape.com/images/octopress_with_container.png" make signature_for_prod` to get a signed path
-
-## To explore
-
-* [Logs, tracing](https://github.com/tokio-rs/tracing?tab=readme-ov-file#in-applications)
