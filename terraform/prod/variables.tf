@@ -25,3 +25,9 @@ variable "domain" {
   description = "Domain to deploy the lambda to"
   type        = string
 }
+
+variable "memory_size_mb" {
+  description = "Memory to allocate for lambda ($$)"
+  default     = 512
+  type        = number
+}

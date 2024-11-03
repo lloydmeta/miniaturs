@@ -12,6 +12,7 @@ use image::{ImageFormat, ImageReader};
 use reqwest::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE};
 use responses::Standard;
 use tower_http::catch_panic::CatchPanicLayer;
+use tracing::instrument;
 
 use crate::api::requests::{ImageResizePathParam, Signature};
 use crate::api::responses::{self, MetadataResponse};
@@ -46,6 +47,7 @@ async fn root() -> Json<Standard> {
     ))
 }
 
+#[instrument(skip(app_components))]
 async fn resize(
     State(app_components): State<AppComponents>,
     uri: Uri,
@@ -181,6 +183,7 @@ async fn resize(
     }
 }
 
+#[instrument(skip(app_components))]
 async fn metadata(
     State(app_components): State<AppComponents>,
     uri: Uri,
@@ -203,6 +206,7 @@ async fn metadata(
     Ok((StatusCode::OK, response_headers, Json(metadata)).into_response())
 }
 
+#[instrument]
 async fn health_check() -> (StatusCode, Json<Standard>) {
     let health = true;
     match health {
@@ -214,6 +218,7 @@ async fn health_check() -> (StatusCode, Json<Standard>) {
     }
 }
 
+#[instrument]
 async fn handle_404(headers: HeaderMap) -> impl IntoResponse {
     match headers.get(ACCEPT).map(|x| x.to_str().unwrap_or("unknown")) {
         Some(s) if s.contains("text/html") => (
@@ -227,6 +232,7 @@ async fn handle_404(headers: HeaderMap) -> impl IntoResponse {
     }
 }
 
+#[instrument]
 fn ensure_signature_is_valid(
     auth_settings: &AuthenticationSettings,
     uri: &Uri,
@@ -294,6 +300,7 @@ impl IntoResponse for AppError {
 use bytes::Bytes;
 use http_body_util::Full;
 
+#[instrument]
 fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response<Full<Bytes>> {
     let details = if let Some(s) = err.downcast_ref::<String>() {
         s.clone()

@@ -1,5 +1,6 @@
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use super::image_caching::ImageResize;
 
@@ -41,9 +42,11 @@ pub trait OperationsRunner {
     async fn run(&self, image: DynamicImage, operations: &Operations) -> DynamicImage;
 }
 
+#[derive(Debug)]
 pub struct SingletonOperationsRunner;
 
 impl OperationsRunner for SingletonOperationsRunner {
+    #[instrument(skip(image))]
     async fn run(&self, image: DynamicImage, operations: &Operations) -> DynamicImage {
         operations.0.iter().fold(image, |next, op| match op {
             Operation::Resize { width, height } => {

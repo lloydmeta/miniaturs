@@ -11,7 +11,7 @@ stop_dev_env:
 	cd terraform/localdev && docker-compose down
 
 begin_dev:
-	source dev.env && cd server && RUST_BACKTRACE=full cargo lambda watch
+	source dev.env && cd server && cargo lambda watch
 
 prod_workspace:
 	@cd terraform/prod && terraform workspace select miniaturs

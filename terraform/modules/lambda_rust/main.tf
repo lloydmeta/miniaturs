@@ -38,7 +38,8 @@ resource "aws_lambda_function" "this" {
   handler       = "bootstrap"
   runtime       = "provided.al2023" # otherwise /var/task/bootstrap: /lib64/libc.so.6: version `GLIBC_2.28' not found (required by /var/task/bootstrap) 
 
-  timeout = 30
+  timeout     = 30
+  memory_size = var.memory_size_mb
 
   environment {
     variables = var.environment_variables

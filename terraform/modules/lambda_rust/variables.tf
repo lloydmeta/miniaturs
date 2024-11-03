@@ -26,3 +26,9 @@ variable "log_retention_days" {
   default     = 14
   type        = number
 }
+
+variable "memory_size_mb" {
+  description = "Memory to allocate for lambda ($$)"
+  default     = 256
+  type        = number
+}
