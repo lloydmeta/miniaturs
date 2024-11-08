@@ -5,11 +5,11 @@ Tiny HTTP image resizer.
 
 ## Goals
 
-* Secure 
-* Fast: 
+* Secure
+* Fast:
   * Startup should be in the low 2-digit ms range (e.g., avoid "oh, it's a lambda")
   * Processing should be quick
-* Cheap: 
+* Cheap:
   * Pay as little as possible and avoid unnecessary work
   * Being fast can help minimise costs
 * Scalable: can handle lots of requests
@@ -82,7 +82,7 @@ flowchart
       cdnCached <-->|fetch| cdnCache
       cdnCached -->|yes| cdnResp
 
-      
+
       cache -->|cache| cdnCache
       cache --> cdnResp
 
@@ -99,8 +99,8 @@ flowchart
       processedCache[("Processed cache")]
       fetchCachedResult["Fetch cached result"]
       opsResultCached{"Operations Result Cached?"}
-      
-    
+
+
       rawCache[("Unprocessed cache")]
       fetchCachedRaw["Fetch cached unprocessed image"]
       rawCached{"Unprocessed image Cached?"}
@@ -110,10 +110,10 @@ flowchart
       cacheRaw["Cache unprocessed image"]
 
       processImage["Process image according to operations"]
-      cacheResult["Cache processed result"]      
+      cacheResult["Cache processed result"]
       lambdaResponse[\"Ok/Error Response"\]
 
-      
+
       cdnCached -->|no| lambdaRequest
       lambdaRequest --> sigCheck
       sigCheck -->|no| lambdaResponse
@@ -121,12 +121,12 @@ flowchart
 
       toOps --> opsCheck
       opsCheck -->|no| lambdaResponse
-      opsCheck -->|yes| fetchCachedResult 
+      opsCheck -->|yes| fetchCachedResult
       fetchCachedResult <-->|fetch| processedCache
       fetchCachedResult --> opsResultCached
       opsResultCached -->|yes| lambdaResponse
 
-      opsResultCached -->|no| fetchCachedRaw 
+      opsResultCached -->|no| fetchCachedRaw
       fetchCachedRaw <-->|fetch| rawCache
       fetchCachedRaw --> rawCached
       rawCached -->|no| fetchRaw
@@ -155,6 +155,7 @@ Assuming we have the [Rust toolbelt installed](https://doc.rust-lang.org/cargo/g
 
 ```sh
 ❯ brew tap cargo-lambda/cargo-lambda
+❯ brew install cargo-lambda
 ```
 
 ### AWS
@@ -190,6 +191,7 @@ Ensure `CLOUDFLARE_API_TOKEN` is defined in the environment (needed for Cloudfla
 Use `Makefile` targets.
 
 * For local dev:
+    * `make init_dev_env` (only needed if TF complains)
     * `make start_dev_env provision_dev_env`
     * `make begin_dev`
     * `TO_SIGN="200x-100/https://beachape.com/images/octopress_with_container.png" make signature_for_localstack` to get a signed path for dev env
