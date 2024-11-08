@@ -1,6 +1,9 @@
 start_dev_env:
 	cd terraform/localdev && docker-compose up &
 
+init_dev_env:
+	cd terraform/localdev && tflocal init
+
 provision_dev_env:
 	cd terraform/localdev && tflocal apply -auto-approve
 
