@@ -184,7 +184,13 @@ Ensure `CLOUDFLARE_API_TOKEN` is defined in the environment (needed for Cloudfla
 * Check what version is needed and install using ^
 
 * For local dev, `localstack` is used (see terraform/localdev/docker-compose.yaml), and `tflocal` is used (https://formulae.brew.sh/formula/terraform-local)
-  * `docker-compose` through official Docker _or_ Rancher is supported, but [enabling admin access](https://github.com/rancher-sandbox/rancher-desktop/issues/2534#issuecomment-1909912585) is needed for running tests with Rancher
+  * `docker-compose` through official Docker _or_ Rancher is supported, but [enabling admin access](https://github.com/rancher-sandbox/rancher-desktop/issues/2534#issuecomment-1909912585) is needed for running tests with Rancher if simply setting the following in shell does not work
+
+    ```sh
+    export DOCKER_HOST=unix://$HOME/.rd/docker.sock
+    export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
+    export TESTCONTAINERS_HOST_OVERRIDE=$(rdctl shell ip a show vznat | awk '/inet / {sub("/.*",""); print $2}')
+    ```
 
 ### Per Environment
 
