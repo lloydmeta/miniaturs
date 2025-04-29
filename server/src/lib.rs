@@ -464,7 +464,7 @@ mod integration_tests {
                 let region = region_provider.region().await.unwrap();
                 let creds =
                     aws_sdk_s3::config::Credentials::new("fake", "fake", None, None, "test");
-                aws_config::defaults(BehaviorVersion::v2024_03_28())
+                aws_config::defaults(BehaviorVersion::v2025_01_17())
                     .region(region.clone())
                     .credentials_provider(creds)
                     .endpoint_url(format!("http://127.0.0.1:{host_port}"))

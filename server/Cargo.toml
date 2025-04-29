@@ -37,7 +37,7 @@ tower-http = { version = "0.6", features = ["catch-panic"] }
 bytesize = "1.3"
 tracing = "0.1"
 reqwest-tracing = "0.5"
-reqwest-middleware = "0.3"
+reqwest-middleware = "0.4"
 
 [dev-dependencies]
 ctor = "0.2.8"

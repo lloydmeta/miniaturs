@@ -129,7 +129,7 @@ pub async fn s3_client() -> &'static aws_sdk_s3::Client {
             let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
             let region = region_provider.region().await.unwrap();
             let creds = s3::config::Credentials::new("fake", "fake", None, None, "test");
-            let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
+            let config = aws_config::defaults(BehaviorVersion::v2025_01_17())
                 .region(region.clone())
                 .credentials_provider(creds)
                 .endpoint_url(format!("http://127.0.0.1:{host_port}"))
