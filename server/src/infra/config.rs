@@ -99,7 +99,7 @@ impl Config {
             .ok()
             .and_then(|s| str::parse::<bool>(&s).ok())
             .is_some();
-        let aws_config = aws_config::load_defaults(BehaviorVersion::v2024_03_28()).await;
+        let aws_config = aws_config::load_defaults(BehaviorVersion::v2025_01_17()).await;
         let aws_settings = AwsSettings {
             aws_config,
             path_style_s3,

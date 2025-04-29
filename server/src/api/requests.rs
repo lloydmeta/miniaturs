@@ -29,7 +29,7 @@ struct ImageResizeVisitor;
 
 const IMAGE_RESIZE_PARSE_ERROR: &str = "A string with two numbers and an x in between";
 
-impl<'de> de::Visitor<'de> for ImageResizeVisitor {
+impl de::Visitor<'_> for ImageResizeVisitor {
     type Value = ImageResizePathParam;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
