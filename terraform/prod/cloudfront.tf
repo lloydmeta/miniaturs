@@ -56,9 +56,18 @@ resource "aws_cloudfront_origin_access_control" "this" {
 }
 
 
-resource "aws_lambda_permission" "allow_cloudfront" {
-  statement_id  = "AllowCloudFrontServicePrincipal"
+resource "aws_lambda_permission" "allow_cloudfront_invoke_url" {
+  statement_id  = "AllowCloudFrontServicePrincipal_invoke_url"
   action        = "lambda:InvokeFunctionUrl"
+  function_name = module.api_lambda.lambda_function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
+}
+
+
+resource "aws_lambda_permission" "allow_cloudfront_invoke_function" {
+  statement_id  = "AllowCloudFrontServicePrincipal_invoke_function"
+  action        = "lambda:InvokeFunction"
   function_name = module.api_lambda.lambda_function_name
   principal     = "cloudfront.amazonaws.com"
   source_arn    = aws_cloudfront_distribution.this.arn
